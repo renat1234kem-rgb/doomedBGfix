@@ -8,8 +8,9 @@ import ru.renat.doomedbgfix.cut.CutLayer;
 import ru.renat.doomedbgfix.cut.CutMath;
 import ru.renat.doomedbgfix.cut.LimbCut;
 
-/** Дошёл до кости - перелом; глубина пропила задаёт срок срастания. */
+/** Дошёл до кости — перелом; глубина пропила задаёт срок срастания. */
 public final class CutBone {
+
     private CutBone() {}
 
     public static void onCut(DoomedData data, BodyPart part, LimbCut cut) {
@@ -20,19 +21,27 @@ public final class CutBone {
             limb.setBoneHealTicks(0);
         }
         int required = CutBridge.requiredBoneTicks(data, limb);
-        int credit = CutMath.boneCredit(cut.boneProgress(), required);
+        int credit = cut.boneThrough() ? 0 : CutMath.boneCredit(cut.boneProgress(), required);
         if (limb.getBoneHealTicks() > credit) limb.setBoneHealTicks(credit);
     }
 
     public static void tick(DoomedData data, BodyPart part, LimbCut cut) {
         LimbData limb = data.getLimb(part);
         if (limb.isDismembered() || cut.depth() <= CutLayer.BONE.start) return;
+
+        // ФИКС: кость пропилена насквозь — отрастить её нельзя, глубину НЕ откатываем.
+        if (cut.boneThrough()) {
+            if (limb.getBone() != BoneState.FRACTURED) limb.setBone(BoneState.FRACTURED);
+            limb.setBoneHealTicks(0);
+            return;
+        }
+
         if (limb.getBone() != BoneState.FRACTURED) {
             cut.clampToBoneStart();
             return;
         }
         int required = CutBridge.requiredBoneTicks(data, limb);
-        float healed = required <= 0 ? 1.0f : (float) limb.getBoneHealTicks() / (float) required;
-        cut.syncBone(1.0f - CutLayer.clamp01(healed));
+        float healed = required <= 0 ? 1f : (float) limb.getBoneHealTicks() / (float) required;
+        cut.syncBone(1f - CutLayer.clamp01(healed));
     }
 }
