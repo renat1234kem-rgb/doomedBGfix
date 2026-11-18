@@ -1,0 +1,18 @@
+{
+  "doomedbgfix.cut.title": "Amputate",
+  "doomedbgfix.cut.layer.skin": "Skin",
+  "doomedbgfix.cut.layer.fat": "Fat / fascia",
+  "doomedbgfix.cut.layer.muscle": "Muscle",
+  "doomedbgfix.cut.layer.bone": "Bone",
+  "doomedbgfix.cut.layer.exit": "Far side",
+  "doomedbgfix.cut.hint.saw": "Hold and saw left and right",
+  "doomedbgfix.cut.hint.bone": "Bone - keep sawing",
+  "doomedbgfix.cut.hint.contact": "Keep the blade on the cut line",
+  "doomedbgfix.cut.hint.paused": "Paused. The cut stays open and keeps bleeding.",
+  "doomedbgfix.cut.hint.esc": "ESC - pause (progress is kept)",
+  "doomedbgfix.cut.tq.ok": "Tourniquet above the cut - flow blocked",
+  "doomedbgfix.cut.tq.bad": "Tourniquet is BELOW the cut - useless",
+  "doomedbgfix.cut.tq.none": "No tourniquet - heavy bleeding",
+  "doomedbgfix.cut.fracture": "Bone fractured",
+  "doomedbgfix.cut.severed": "Limb severed"
+}

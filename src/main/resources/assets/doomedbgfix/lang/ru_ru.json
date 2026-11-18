@@ -1,0 +1,18 @@
+{
+  "doomedbgfix.cut.title": "Ампутация",
+  "doomedbgfix.cut.layer.skin": "Кожа",
+  "doomedbgfix.cut.layer.fat": "Жир / фасция",
+  "doomedbgfix.cut.layer.muscle": "Мышца",
+  "doomedbgfix.cut.layer.bone": "Кость",
+  "doomedbgfix.cut.layer.exit": "Дальняя стенка",
+  "doomedbgfix.cut.hint.saw": "Зажми и пили влево-вправо",
+  "doomedbgfix.cut.hint.bone": "Кость - продолжай пилить",
+  "doomedbgfix.cut.hint.contact": "Держи полотно на линии реза",
+  "doomedbgfix.cut.hint.paused": "Пауза. Рез открыт и продолжает кровить.",
+  "doomedbgfix.cut.hint.esc": "ESC - пауза (прогресс сохраняется)",
+  "doomedbgfix.cut.tq.ok": "Жгут выше реза - кровоток перекрыт",
+  "doomedbgfix.cut.tq.bad": "Жгут НИЖЕ реза - не поможет",
+  "doomedbgfix.cut.tq.none": "Жгута нет - будет сильное кровотечение",
+  "doomedbgfix.cut.fracture": "Кость сломана",
+  "doomedbgfix.cut.severed": "Конечность отделена"
+}
