@@ -2,13 +2,22 @@ package ru.renat.doomedbgfix.cut;
 
 import static ru.renat.doomedbgfix.cut.CutLayer.clamp01;
 
-/** Чистая математика реза, без классов Minecraft. Ориентиры - ванильное AmputationCut. */
+/** Чистая математика реза, без классов Minecraft. Ориентиры - ванильное AmputationCut / BleedHandler. */
 public final class CutMath {
     private CutMath() {}
 
     public static final float WORK_PER_SECOND = 0.075f;
     /** Vanilla: один полный проход пилы = 0.08 работы. */
     public static final float WORK_PER_STROKE = 0.08f;
+
+    // Калибровка крови по ванильным ориентирам:
+    //   SMALL_BLEED_UNITS = 2, SERIOUS_BLEED_UNITS = 8, DEEP_WOUND_THRESHOLD = 20,
+    //   SurgeryManager.OPEN_BLEED_MAX = 1.1, культя после отделения = 100.
+    public static final float BLEED_SKIN_END   = 1.0f;
+    public static final float BLEED_FAT_END    = 2.0f;
+    public static final float BLEED_MUSCLE_END = 6.0f;
+    public static final float BLEED_BONE_END   = 8.0f;
+    public static final float BLEED_EXIT_END   = 14.0f;
 
     public record Tissue(float skin, float muscle, boolean fractured, boolean saw, float boneScale) {}
 
@@ -64,13 +73,17 @@ public final class CutMath {
         return sum;
     }
 
+    /**
+     * Кровь ДО полного отделения. Пик 14 единиц (~0.7 L/min по твоим замерам),
+     * а не 65 как было. Полное отделение по-прежнему даёт ванильные 100 на культе.
+     */
     public static float bleedTarget(float depth, float toolMult) {
         float b;
-        if (depth < CutLayer.SKIN.end)        b = lerp(0.5f,  4f,  CutLayer.SKIN.frac(depth));
-        else if (depth < CutLayer.FAT.end)    b = lerp(4f,   10f,  CutLayer.FAT.frac(depth));
-        else if (depth < CutLayer.MUSCLE.end) b = lerp(10f,  40f,  CutLayer.MUSCLE.frac(depth));
-        else if (depth < CutLayer.BONE.end)   b = lerp(40f,  32f,  CutLayer.BONE.frac(depth));
-        else                                  b = lerp(32f,  65f,  CutLayer.EXIT.frac(depth));
+        if (depth < CutLayer.SKIN.end)        b = lerp(0.2f, BLEED_SKIN_END,   CutLayer.SKIN.frac(depth));
+        else if (depth < CutLayer.FAT.end)    b = lerp(BLEED_SKIN_END,   BLEED_FAT_END,    CutLayer.FAT.frac(depth));
+        else if (depth < CutLayer.MUSCLE.end) b = lerp(BLEED_FAT_END,    BLEED_MUSCLE_END, CutLayer.MUSCLE.frac(depth));
+        else if (depth < CutLayer.BONE.end)   b = lerp(BLEED_MUSCLE_END, BLEED_BONE_END,   CutLayer.BONE.frac(depth));
+        else                                  b = lerp(BLEED_BONE_END,   BLEED_EXIT_END,   CutLayer.EXIT.frac(depth));
         return b * toolMult;
     }
 
@@ -89,9 +102,17 @@ public final class CutMath {
         return Math.round(requiredTicks * (1f - clamp01(boneProgress)));
     }
 
+    /**
+     * Боль ровно по ванильной формуле AmputationCut.stroke():
+     *   painAdded = 2 + 4*depth + 3*(boneWork / 0.08)
+     * только пересчитанной на фактически приложенную работу. Итог за всю процедуру
+     * совпадает с оригиналом (~140), независимо от того, как быстро ты пилишь.
+     */
     public static float pain(float depth, float work, float toolMult) {
-        float layer = CutLayer.at(depth) == CutLayer.BONE ? 1.8f : 1.0f;
-        return work * (26f + 50f * clamp01(depth)) * layer * toolMult;
+        float strokes = Math.max(0f, work) / WORK_PER_STROKE;
+        float base = (2f + 4f * clamp01(depth)) * strokes;
+        float bone = CutLayer.at(depth) == CutLayer.BONE ? 3f * strokes : 0f;
+        return (base + bone) * toolMult;
     }
 
     public static float effort(float consciousness, float feltPain) {

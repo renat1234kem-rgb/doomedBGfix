@@ -10,7 +10,10 @@ public final class CutTicker {
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
-        if (event.player instanceof ServerPlayer sp) CutSessions.tick(sp);
+        if (event.player instanceof ServerPlayer sp) {
+            CutSessions.tick(sp);
+            PhantomNerf.tick(sp, CutBridge.data(sp));
+        }
     }
 
     @SubscribeEvent
