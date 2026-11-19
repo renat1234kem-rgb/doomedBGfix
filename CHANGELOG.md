@@ -1,7 +1,5 @@
 # Doomed BG Fix 0.2.0
 
-Полный проект. Можно просто заменить всё содержимое репозитория (кроме libs/ - там твои jar).
-Если не хочешь качать целиком - возьми doomedBGfix-0.2.0-PATCH.zip, там только изменённые файлы.
 
 ## Новое в 0.2.0 (фикс пакетов)
 
@@ -22,39 +20,3 @@
 * Боль - точная ванильная формула, пересчитанная на приложенную работу. (`cut/CutMath.java`)
 * `server/PhantomNerf.java` - потолки фантомной боли (12 вместо 36..70), приступ <= 8 с.
 * Фикс исчезновения жгута при потере конечности. (`server/TourniquetFix.java`)
-
-## Что заменено относительно 0.1.0
-
-    gradle.properties                                   (версия 0.2.0)
-    src/main/resources/doomedbgfix.mixins.json          (3 миксина вместо 1)
-    src/main/java/ru/renat/doomedbgfix/DoomedBGFix.java (регистрация BarrelFill + BagTooltip)
-    .../config/BGConfig.java                            (секции phantom + fixes расширены)
-    .../cut/CutMath.java                                (кровь + боль)
-    .../cut/LimbCut.java                                (boneThrough)
-    .../server/CutBone.java                             (boneThrough)
-    .../server/CutTicker.java                           (вызов PhantomNerf)
-
-## Новые файлы
-
-    .../server/PhantomNerf.java
-    .../bag/BagVolume.java
-    .../bag/BagInfusion.java
-    .../bag/BarrelFill.java
-    .../bag/BagTooltip.java
-    .../mixin/DrugServiceMixin.java
-    .../mixin/CoopMedicalMixin.java
-    CHANGELOG.md
-
-## Сборка
-
-    ./gradlew build      -> build/libs/doomedbgfix-0.2.0.jar
-
-Старый doomedbgfix-0.1.0.jar из mods/ убери. Конфиг Forge допишет новые ключи сам;
-если хочешь дефолты начисто - удали config/doomedbgfix-common.toml.
-
-## Что ещё НЕ сделано
-
-Мгновенное действие шприцов. Причина найдена: `SyringeScreen.doMouseReleased` -> `inject()`
-отправляет дозу один раз при отпускании. Нужен стриминг дельт + кумулятивные пороги
-(например `EPINEPHRINE: if (ml >= 40) tryStartFibrillation`), иначе передоз перестанет работать.
-Это следующий патч.

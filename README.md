@@ -18,23 +18,8 @@
 2. Фикс жгута: при потере конечности (performOn, самоампутация, dismember, necroticLoss, gibHead)
    жгут больше не исчезает - возвращается в инвентарь или падает на землю с тем же износом.
 
-## Сборка
-
-В libs/ должны лежать doomedmatu-0.4.7.3.jar и doomedguns-0.2.x.jar, затем:
-
-    gradle wrapper --gradle-version 8.8    (один раз, если нет gradlew)
-    ./gradlew build
-
-Результат: build/libs/doomedbgfix-0.1.0.jar
-Проще всего открыть папку в IntelliJ IDEA - она сама подтянет Gradle 8.8 и JDK 17.
-В репозитории есть GitHub Actions (.github/workflows/build.yml): jar собирается автоматически на push.
 
 ## Конфиг
 
 config/doomedbgfix-common.toml: скорость пиления, множители крови/боли, скорость закрытия заброшенного реза,
 твёрдость кости, анти-чит лимиты, enableRework (выключить = ванильная мини-игра), dropTourniquetOnLimbLoss.
-
-## Совместимость
-
-Один миксин (DismemberServiceMixin) в классы Doomed, всё остальное - публичное API мода.
-Doomed распространяется под All Rights Reserved: jar-ы зависимостей лежат в libs/ и НЕ вшиваются в наш jar.
