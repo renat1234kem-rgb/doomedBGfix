@@ -19,12 +19,15 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import ru.renat.doomedbgfix.config.BGConfig;
 import ru.renat.doomedbgfix.server.CutBridge;
 
+import java.util.Locale;
+
 /**
- * Свой набор крови в пустой пакет. Ванильный EmptyBloodBagItem.use у тебя молча
- * ничего не делает, поэтому берём операцию себе и всегда пишем причину отказа.
- * Пороги донора ослаблены конфигом (ваниль требует >= 4.0 L и >= 80% RBC).
+ * Свой набор крови в пустой пакет: ванильный у тебя молча ничего не делал.
+ * Всегда пишем либо результат, либо конкретную причину отказа.
  */
 public final class EmptyBagRefill {
+
+    private boolean consumed;
 
     @SubscribeEvent(priority = EventPriority.HIGH)
     public void onUseItem(PlayerInteractEvent.RightClickItem event) {
@@ -35,7 +38,7 @@ public final class EmptyBagRefill {
 
     @SubscribeEvent(priority = EventPriority.LOW)
     public void onUseBlock(PlayerInteractEvent.RightClickBlock event) {
-        // бочки с физраствором обслуживает BarrelFill, туда не лезем
+        // бочки с физраствором обслуживает BarrelFill
         if (event.getLevel().getBlockEntity(event.getPos()) instanceof FluidBarrelBlockEntity) return;
         handle(event.getLevel(), event.getEntity() instanceof ServerPlayer sp ? sp : null,
                 event.getHand(), event.getItemStack());
@@ -45,8 +48,6 @@ public final class EmptyBagRefill {
         }
     }
 
-    private boolean consumed;
-
     private void handle(Level level, ServerPlayer sp, InteractionHand hand, ItemStack stack) {
         consumed = false;
         if (!BGConfig.ownBloodDraw()) return;
@@ -54,7 +55,7 @@ public final class EmptyBagRefill {
         if (hand != InteractionHand.MAIN_HAND) return;
         if (stack.isEmpty() || !stack.is(DoomedItems.EMPTY_BLOOD_BAG.get())) return;
 
-        consumed = true;   // дальше мы сами решаём судьбу клика
+        consumed = true;
 
         DoomedData d = CutBridge.data(sp);
         if (d == null || !d.isActive()) {
@@ -64,13 +65,13 @@ public final class EmptyBagRefill {
 
         float litres = BGConfig.donateLitres();
         if (d.getBloodVolume() - litres < BGConfig.donateBloodFloor()) {
-            say(sp, String.format(java.util.Locale.ROOT,
-                    "Not enough blood to fill a bag: %.2f L, need %.2f L left after drawing.",
-                    d.getBloodVolume(), BGConfig.donateBloodFloor() + litres));
+            say(sp, String.format(Locale.ROOT,
+                    "Not enough blood: %.2f L left, need %.2f L to stay after drawing %.2f L.",
+                    d.getBloodVolume(), BGConfig.donateBloodFloor(), litres));
             return;
         }
         if (d.getRedCellFraction() < BGConfig.donateRbcMin()) {
-            say(sp, String.format(java.util.Locale.ROOT,
+            say(sp, String.format(Locale.ROOT,
                     "Blood too thin: %d%% RBC, need %d%%.",
                     Math.round(d.getRedCellFraction() * 100f), Math.round(BGConfig.donateRbcMin() * 100f)));
             return;
@@ -89,8 +90,11 @@ public final class EmptyBagRefill {
         if (!sp.isCreative()) stack.shrink(1);
         BagVolume.give(sp, full);
 
-        say(sp, String.format(java.util.Locale.ROOT, "Filled %s bag: %d ml, %.2f L drawn.",
-                type.label(), BagVolume.realMl(full), litres));
+        // ФИКС: объём пакета и снятая кровь считаем из одного места и подписываем явно,
+        // чтобы не было больше "500 ml, 0.75 L".
+        int ml = BagVolume.realMl(full);
+        say(sp, String.format(Locale.ROOT, "Filled %s bag: %d ml (%.2f L). Drawn from you: %.2f L.",
+                type.label(), ml, ml / 1000f, litres));
         DoomedDataUtil.sync(sp);
     }
 

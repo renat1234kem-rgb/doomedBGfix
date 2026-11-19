@@ -9,18 +9,29 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Остаток пакета в тех же единицах, что использует мод: 100 = полный пакет.
- * Кровь: 100 ед = 0.75 Л, физраствор: 100 ед = 0.5 Л (константы самого Doomed).
+ * Остаток пакета в единицах мода: 100 = полный пакет.
+ * Объём считаем из ОДНОГО источника истины, чтобы тултип, сообщение и
+ * физиология не разъезжались (было "500 ml, 0.75 L").
  */
 public final class BagVolume {
 
     public static final String TAG = "BGFixBagMl";
     public static final int FULL = 100;
 
+    /** Совпадает с константами Doomed: BloodBagItem = 0.75 L, SalineItem = 0.5 L. */
+    public static final float BLOOD_LITRES = 0.75f;
+    public static final float SALINE_LITRES = 0.5f;
+
     private BagVolume() {}
 
+    public static boolean isBlood(ItemStack s) {
+        if (s.isEmpty()) return false;
+        // instanceof + явная проверка id: раньше пакет иногда падал в ветку физраствора
+        return s.getItem() instanceof BloodBagItem || s.is(DoomedItems.BLOOD_BAG_HUMAN.get());
+    }
+
     public static boolean isBag(ItemStack s) {
-        return !s.isEmpty() && (s.getItem() instanceof BloodBagItem || s.is(DoomedItems.SALINE.get()));
+        return !s.isEmpty() && (isBlood(s) || s.is(DoomedItems.SALINE.get()));
     }
 
     public static int get(ItemStack s) {
@@ -34,14 +45,17 @@ public final class BagVolume {
         else s.getOrCreateTag().putInt(TAG, v);
     }
 
-    /** Реальный объём в миллилитрах для тултипа. */
-    public static int realMl(ItemStack s) {
-        float litres = s.getItem() instanceof BloodBagItem ? 0.75f : 0.5f;
-        return Math.round(litres * 1000f * get(s) / (float) FULL);
+    public static float litresFull(ItemStack s) {
+        return isBlood(s) ? BLOOD_LITRES : SALINE_LITRES;
     }
 
     public static int capacityMl(ItemStack s) {
-        return s.getItem() instanceof BloodBagItem ? 750 : 500;
+        return Math.round(litresFull(s) * 1000f);
+    }
+
+    /** Реальный остаток в миллилитрах. */
+    public static int realMl(ItemStack s) {
+        return Math.round(capacityMl(s) * get(s) / (float) FULL);
     }
 
     /**
@@ -63,13 +77,12 @@ public final class BagVolume {
 
         if (left > 0) return;
 
-        boolean blood = target.getItem() instanceof BloodBagItem;
+        boolean blood = isBlood(target);
         int mask = FluidSyringeItem.bloodPathogenMask(target);
         target.shrink(1);
 
         ItemStack empty = new ItemStack(DoomedItems.EMPTY_BLOOD_BAG.get());
         if (blood) {
-            // как в оригинале: пакет из-под крови считается использованным
             FluidSyringeItem.setContaminated(empty, true);
             FluidSyringeItem.addBloodPathogens(empty, mask | ContagionHandler.bloodPathogenMask(patient));
         }

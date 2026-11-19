@@ -17,6 +17,7 @@ public final class BGConfig {
     private static final ForgeConfigSpec.DoubleValue BONE_RESISTANCE_SCALE;
     private static final ForgeConfigSpec.DoubleValue MAX_WORK_PER_PACKET;
     private static final ForgeConfigSpec.IntValue IDLE_TIMEOUT_TICKS;
+    private static final ForgeConfigSpec.IntValue SAW_SOUND_MS;
     private static final ForgeConfigSpec.BooleanValue FORCE_DEEP_WOUND;
     private static final ForgeConfigSpec.BooleanValue PHANTOM_NERF;
     private static final ForgeConfigSpec.DoubleValue PHANTOM_SUS_CAP;
@@ -42,8 +43,7 @@ public final class BGConfig {
                 .defineInRange("bleedScale", 1.0D, 0.0D, 3.0D);
         PAIN_SCALE = b.comment("Extra multiplier on the whole pain formula.")
                 .defineInRange("painScale", 1.0D, 0.0D, 3.0D);
-        SOFT_PAIN_SCALE = b.comment("Pain multiplier for skin/fat/muscle only. Bone is untouched.",
-                        "Vanilla barely feels the soft layers because reaching bone costs only ~0.34 work.")
+        SOFT_PAIN_SCALE = b.comment("Pain multiplier for skin/fat/muscle only. Bone is untouched.")
                 .defineInRange("softTissuePainScale", 2.5D, 0.1D, 8.0D);
         DECAY_SCALE = b.comment("How fast an abandoned cut closes. 1.0 = 1:1 with limb regeneration.")
                 .defineInRange("decayScale", 2.0D, 0.0D, 20.0D);
@@ -53,7 +53,11 @@ public final class BGConfig {
                 .defineInRange("maxWorkPerPacket", 0.25D, 0.05D, 2.0D);
         IDLE_TIMEOUT_TICKS = b.comment("Session closes after this many idle ticks. Progress is NEVER lost.")
                 .defineInRange("idleTimeoutTicks", 6000, 200, 72000);
-        FORCE_DEEP_WOUND = b.comment("Keep the cut a deep wound so it can be stitched immediately.")
+        SAW_SOUND_MS = b.comment("Minimum gap between saw sounds, milliseconds.",
+                        "The sound only plays when the cut actually got deeper, never on idle sync packets.",
+                        "0 = no cooldown (old spammy behaviour).")
+                .defineInRange("sawSoundCooldownMs", 320, 0, 2000);
+        FORCE_DEEP_WOUND = b.comment("Keep the cut registered as a deep wound so it can be stitched immediately.")
                 .define("forceDeepWound", true);
         b.pop();
 
@@ -66,11 +70,11 @@ public final class BGConfig {
         b.pop();
 
         b.comment("Stump aftercare. The stump wound lives on the PROXIMAL segment.",
-                        "Vanilla puts bleeding=100 there (2.4 L/min) and pins pain at ~90 for ~90 minutes.")
+                        "Vanilla puts bleeding=100 there and pins pain at ~90 for ~90 minutes.")
                 .push("aftercare");
         STUMP_BLEED_SCALE = b.comment("Ceiling for stump bleed, as a fraction of vanilla 100.",
-                        "0.32 -> ~0.77 L/min (Casualties: Unknown uses 0.75). 1.0 = vanilla.")
-                .defineInRange("stumpBleedScale", 0.32D, 0.0D, 1.0D);
+                        "0.28 -> ~1.20 L/min in game. 1.0 = vanilla (2.4 L/min).")
+                .defineInRange("stumpBleedScale", 0.28D, 0.0D, 1.0D);
         RESIDUAL_PAIN_CAP = b.comment("Ceiling for residual stump pain. 100 = vanilla.")
                 .defineInRange("residualPainCap", 40.0D, 0.0D, 100.0D);
         STUMP_HEAL_BOOST = b.comment("Extra stump healing per second, works while bleeding at 35% rate.")
@@ -86,14 +90,13 @@ public final class BGConfig {
                 .define("barrelFill", true);
         BARREL_MB = b.comment("Millibuckets drained for one full bag.")
                 .defineInRange("barrelMbPerBag", 500, 100, 4000);
-        OWN_DRAW = b.comment("Handle drawing blood into an empty bag ourselves, with explicit refusal messages.",
-                        "Vanilla requires >= 4.0 L and >= 80% RBC and silently does nothing on some paths.")
+        OWN_DRAW = b.comment("Handle drawing blood into an empty bag ourselves, with explicit refusal messages.")
                 .define("ownBloodDraw", true);
         DONATE_FLOOR = b.comment("Blood volume that must REMAIN after drawing, litres.")
                 .defineInRange("donateBloodFloor", 2.5D, 0.5D, 4.5D);
         DONATE_RBC = b.comment("Minimum red cell fraction to donate (vanilla 0.8).")
                 .defineInRange("donateRbcMin", 0.5D, 0.1D, 1.0D);
-        DONATE_LITRES = b.comment("Litres drawn per bag (vanilla bag = 0.75 L).")
+        DONATE_LITRES = b.comment("Litres drawn per bag. Keep 0.75 so it matches a full blood bag.")
                 .defineInRange("donateLitres", 0.75D, 0.1D, 1.5D);
         CLEAN_REFILL = b.comment("Clear the 'used before' contamination flag on a refilled bag.")
                 .define("cleanRefilledBag", true);
@@ -120,6 +123,7 @@ public final class BGConfig {
     public static float boneResistanceScale() { return (float) (double) BONE_RESISTANCE_SCALE.get(); }
     public static float maxWorkPerPacket()    { return (float) (double) MAX_WORK_PER_PACKET.get(); }
     public static int idleTimeoutTicks()      { return IDLE_TIMEOUT_TICKS.get(); }
+    public static int sawSoundCooldownMs()    { return SAW_SOUND_MS.get(); }
     public static boolean forceDeepWound()    { return FORCE_DEEP_WOUND.get(); }
     public static boolean phantomNerf()       { return PHANTOM_NERF.get(); }
     public static float phantomSusceptibilityCap() { return (float) (double) PHANTOM_SUS_CAP.get(); }

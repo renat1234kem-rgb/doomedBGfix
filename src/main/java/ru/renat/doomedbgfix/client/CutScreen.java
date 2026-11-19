@@ -10,6 +10,7 @@ import net.mattlives.doomedmatu.registry.DoomedSounds;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import ru.renat.doomedbgfix.config.BGConfig;
 import ru.renat.doomedbgfix.cut.CutLayer;
 import ru.renat.doomedbgfix.cut.CutMath;
 import ru.renat.doomedbgfix.net.BGNetwork;
@@ -22,9 +23,9 @@ import ru.renat.doomedbgfix.net.S2COpenCutPacket;
 import java.util.Locale;
 
 /**
- * Новая ампутация: геометрия и темп близки к оригиналу (диск, пила, рез сверху вниз,
- * 0.08 работы за полный проход), но слои видны, кровь идёт с первого движения,
- * прогресс не сбрасывается, кость ломается пропорционально пропилу.
+ * Новая ампутация: геометрия и темп близки к оригиналу, но слои видны,
+ * кровь идёт с первого движения, прогресс не сбрасывается,
+ * кость ломается пропорционально пропилу.
  */
 public final class CutScreen extends DoomedScreen {
 
@@ -55,6 +56,7 @@ public final class CutScreen extends DoomedScreen {
     private float accum;
     private float contact;
     private long lastSendMs;
+    private long lastSoundMs;
 
     public CutScreen(S2COpenCutPacket packet) {
         super(Component.translatable("doomedbgfix.cut.title"));
@@ -139,21 +141,50 @@ public final class CutScreen extends DoomedScreen {
 
     public void accept(S2CCutStatePacket state) {
         if (state.token() != token || state.part() != part.ordinal() || state.patientId() != patientId) return;
+
+        // ФИКС: отделение проверяем ПЕРВЫМ. Сервер шлёт valid=false при severed,
+        // раньше мы выходили на проверке valid и до автозакрытия не доходили.
+        if (state.severed()) {
+            severed = true;
+            holding = false;
+            depth = 1f;
+            shown = 1f;
+            if (state.view() != null) view = state.view();
+            flashSuccess();
+            ClientSfx.play(DoomedSounds.BONEHIT.get(), 0.6f, 0.6f);
+            closeNow();
+            return;
+        }
+
+        float before = depth;
         depth = Mth.clamp(state.depth(), 0f, 1f);
         if (state.view() != null) view = state.view();
+
         if (!state.valid()) {
             stopped = true;
             holding = false;
             return;
         }
-        ClientSfx.play(DoomedSounds.SAW.get(), CutLayer.at(depth) == CutLayer.BONE ? 0.72f : 1.05f, 0.35f);
-        if (patientId == -1) winceFlash(Math.min(0.35f, 0.08f + depth * 0.2f));
-        if (state.severed()) {
-            severed = true;
-            holding = false;
-            flashSuccess();
-            ClientSfx.play(DoomedSounds.BONEHIT.get(), 0.6f, 0.6f);
-            onClose();
+
+        // ФИКС: звук только когда рез реально углубился и прошёл кулдаун.
+        // Idle-синки раз в секунду больше не пищат пилой вечно.
+        boolean progressed = depth > before + 1.0E-4f;
+        long now = System.currentTimeMillis();
+        int cooldown = BGConfig.sawSoundCooldownMs();
+        if (progressed && now - lastSoundMs >= cooldown) {
+            lastSoundMs = now;
+            ClientSfx.play(DoomedSounds.SAW.get(), CutLayer.at(depth) == CutLayer.BONE ? 0.72f : 1.05f, 0.35f);
+            if (patientId == -1) winceFlash(Math.min(0.35f, 0.08f + depth * 0.2f));
+        }
+    }
+
+    /** Полное отделение — закрываем экран сами, без ручного ESC. */
+    private void closeNow() {
+        CutClient.clear(this);
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(null);
+        } else {
+            super.onClose();
         }
     }
 
