@@ -8,6 +8,8 @@ import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import ru.renat.doomedbgfix.bag.BagTooltip;
+import ru.renat.doomedbgfix.bag.BarrelFill;
 import ru.renat.doomedbgfix.config.BGConfig;
 import ru.renat.doomedbgfix.cut.CutCapability;
 import ru.renat.doomedbgfix.net.BGNetwork;
@@ -24,6 +26,8 @@ public final class DoomedBGFix {
         CutCapability.register(modBus);
         BGNetwork.register();
         MinecraftForge.EVENT_BUS.register(new CutTicker());
-        LOGGER.info("[doomedbgfix] amputation rework armed");
+        MinecraftForge.EVENT_BUS.register(new BarrelFill());
+        MinecraftForge.EVENT_BUS.register(new BagTooltip());
+        LOGGER.info("[doomedbgfix] amputation rework + bag volume fix armed");
     }
 }

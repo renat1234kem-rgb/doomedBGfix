@@ -20,7 +20,7 @@ public final class LimbCut {
     public boolean inBone()     { return depth >= CutLayer.BONE.start; }
     public float boneProgress() { return CutMath.boneProgress(depth); }
 
-    /** Кость пропилена насквозь — обратно она уже не отрастает. */
+    /** Кость пропилена насквозь - обратно она уже не отрастает. */
     public boolean boneThrough() { return boneThrough; }
 
     /** Ниже этого предела прогресс откатиться не может. */

@@ -8,7 +8,7 @@ import ru.renat.doomedbgfix.cut.CutLayer;
 import ru.renat.doomedbgfix.cut.CutMath;
 import ru.renat.doomedbgfix.cut.LimbCut;
 
-/** Дошёл до кости — перелом; глубина пропила задаёт срок срастания. */
+/** Дошёл до кости - перелом; глубина пропила задаёт срок срастания. */
 public final class CutBone {
 
     private CutBone() {}
@@ -29,7 +29,7 @@ public final class CutBone {
         LimbData limb = data.getLimb(part);
         if (limb.isDismembered() || cut.depth() <= CutLayer.BONE.start) return;
 
-        // ФИКС: кость пропилена насквозь — отрастить её нельзя, глубину НЕ откатываем.
+        // Кость пропилена насквозь - отрастить её нельзя, глубину НЕ откатываем.
         if (cut.boneThrough()) {
             if (limb.getBone() != BoneState.FRACTURED) limb.setBone(BoneState.FRACTURED);
             limb.setBoneHealTicks(0);

@@ -6,6 +6,9 @@ public final class BGConfig {
     public static final ForgeConfigSpec SPEC;
     private static final ForgeConfigSpec.BooleanValue ENABLE_REWORK;
     private static final ForgeConfigSpec.BooleanValue DROP_TOURNIQUET;
+    private static final ForgeConfigSpec.BooleanValue BAG_PARTIAL;
+    private static final ForgeConfigSpec.BooleanValue BARREL_FILL;
+    private static final ForgeConfigSpec.IntValue BARREL_MB;
     private static final ForgeConfigSpec.DoubleValue WORK_PER_SECOND;
     private static final ForgeConfigSpec.DoubleValue BLEED_SCALE;
     private static final ForgeConfigSpec.DoubleValue PAIN_SCALE;
@@ -28,7 +31,7 @@ public final class BGConfig {
                 .defineInRange("workPerSecond", 0.075D, 0.01D, 0.5D);
         BLEED_SCALE = b.comment("Extra multiplier on top of the vanilla-calibrated bleed curve (peak 14 units).")
                 .defineInRange("bleedScale", 1.0D, 0.0D, 3.0D);
-        PAIN_SCALE = b.comment("Extra multiplier on top of the exact vanilla pain formula. 0.7 = a bit gentler than原版.")
+        PAIN_SCALE = b.comment("Extra multiplier on top of the exact vanilla pain formula. 0.7 = gentler than vanilla.")
                 .defineInRange("painScale", 1.0D, 0.0D, 3.0D);
         DECAY_SCALE = b.comment("How fast an abandoned cut closes. 1.0 = 1:1 with limb regeneration.")
                 .defineInRange("decayScale", 2.0D, 0.0D, 20.0D);
@@ -57,6 +60,14 @@ public final class BGConfig {
         b.push("fixes");
         DROP_TOURNIQUET = b.comment("Drop the tourniquet as an item when the limb it sits on is removed.")
                 .define("dropTourniquetOnLimbLoss", true);
+        BAG_PARTIAL = b.comment("Blood/saline bags keep their remaining volume instead of being destroyed on first use.",
+                        "When a bag runs dry it turns into an empty blood bag that can be refilled.")
+                .define("partialBagUse", true);
+        BARREL_FILL = b.comment("RMB with an empty bag (or a part-used saline bag) on a fluid barrel to fill/top it up.",
+                        "Accepts doomedmatu:saline and doomedmatu:ringersolution. Port of the old KubeJS script.")
+                .define("barrelFill", true);
+        BARREL_MB = b.comment("Millibuckets drained from the barrel for one full bag.")
+                .defineInRange("barrelMbPerBag", 500, 100, 4000);
         b.pop();
         SPEC = b.build();
     }
@@ -64,6 +75,9 @@ public final class BGConfig {
     private BGConfig() {}
     public static boolean enableRework()      { return ENABLE_REWORK.get(); }
     public static boolean dropTourniquet()    { return DROP_TOURNIQUET.get(); }
+    public static boolean bagPartialUse()     { return BAG_PARTIAL.get(); }
+    public static boolean barrelFill()        { return BARREL_FILL.get(); }
+    public static int barrelMbPerBag()        { return BARREL_MB.get(); }
     public static float workPerSecond()       { return (float) (double) WORK_PER_SECOND.get(); }
     public static float bleedScale()          { return (float) (double) BLEED_SCALE.get(); }
     public static float painScale()           { return (float) (double) PAIN_SCALE.get(); }
