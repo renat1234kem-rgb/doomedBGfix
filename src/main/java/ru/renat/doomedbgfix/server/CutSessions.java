@@ -140,6 +140,8 @@ public final class CutSessions {
         if (!done) return false;
         // performOn даёт 30 траумы, ванильная самоампутация - 10. Компенсируем разницу.
         if (session.self) pd.addTrauma(-20.0f * CutBridge.toolPain(session.tool));
+        // Ванильная культя кровит на 100 (2.4 L/min). Приглушаем до уровня Casualties: Unknown.
+        AmputationAftercare.scaleStumpBleed(pd, part);
         CutProgress progress = CutCapability.get(patient).orElse(null);
         if (progress != null) {
             for (BodyPart distal : part.distalIncludingSelf()) progress.get(distal).reset();

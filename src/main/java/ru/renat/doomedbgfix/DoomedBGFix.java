@@ -10,6 +10,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import ru.renat.doomedbgfix.bag.BagTooltip;
 import ru.renat.doomedbgfix.bag.BarrelFill;
+import ru.renat.doomedbgfix.bag.EmptyBagRefill;
 import ru.renat.doomedbgfix.config.BGConfig;
 import ru.renat.doomedbgfix.cut.CutCapability;
 import ru.renat.doomedbgfix.net.BGNetwork;
@@ -28,6 +29,7 @@ public final class DoomedBGFix {
         MinecraftForge.EVENT_BUS.register(new CutTicker());
         MinecraftForge.EVENT_BUS.register(new BarrelFill());
         MinecraftForge.EVENT_BUS.register(new BagTooltip());
-        LOGGER.info("[doomedbgfix] amputation rework + bag volume fix armed");
+        MinecraftForge.EVENT_BUS.register(new EmptyBagRefill());
+        LOGGER.info("[doomedbgfix] amputation rework + bag fixes armed (v0.2.2)");
     }
 }

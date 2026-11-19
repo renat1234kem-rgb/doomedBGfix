@@ -12,6 +12,7 @@ public final class BGConfig {
     private static final ForgeConfigSpec.DoubleValue WORK_PER_SECOND;
     private static final ForgeConfigSpec.DoubleValue BLEED_SCALE;
     private static final ForgeConfigSpec.DoubleValue PAIN_SCALE;
+    private static final ForgeConfigSpec.DoubleValue SOFT_PAIN_SCALE;
     private static final ForgeConfigSpec.DoubleValue DECAY_SCALE;
     private static final ForgeConfigSpec.DoubleValue BONE_RESISTANCE_SCALE;
     private static final ForgeConfigSpec.DoubleValue MAX_WORK_PER_PACKET;
@@ -21,6 +22,14 @@ public final class BGConfig {
     private static final ForgeConfigSpec.DoubleValue PHANTOM_SUS_CAP;
     private static final ForgeConfigSpec.DoubleValue PHANTOM_PAIN_CAP;
     private static final ForgeConfigSpec.IntValue PHANTOM_EPISODE_SECONDS;
+    private static final ForgeConfigSpec.DoubleValue STUMP_BLEED_SCALE;
+    private static final ForgeConfigSpec.DoubleValue RESIDUAL_PAIN_CAP;
+    private static final ForgeConfigSpec.DoubleValue STUMP_HEAL_BOOST;
+    private static final ForgeConfigSpec.BooleanValue OWN_DRAW;
+    private static final ForgeConfigSpec.DoubleValue DONATE_FLOOR;
+    private static final ForgeConfigSpec.DoubleValue DONATE_RBC;
+    private static final ForgeConfigSpec.DoubleValue DONATE_LITRES;
+    private static final ForgeConfigSpec.BooleanValue CLEAN_REFILL;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -29,10 +38,13 @@ public final class BGConfig {
                 .define("enableRework", true);
         WORK_PER_SECOND = b.comment("Global saw speed. Vanilla: ~2.21 work total, 0.08 per full stroke.")
                 .defineInRange("workPerSecond", 0.075D, 0.01D, 0.5D);
-        BLEED_SCALE = b.comment("Extra multiplier on top of the vanilla-calibrated bleed curve (peak 14 units).")
+        BLEED_SCALE = b.comment("Extra multiplier on the in-progress bleed curve (peak 36 units).")
                 .defineInRange("bleedScale", 1.0D, 0.0D, 3.0D);
-        PAIN_SCALE = b.comment("Extra multiplier on top of the exact vanilla pain formula. 0.7 = gentler than vanilla.")
+        PAIN_SCALE = b.comment("Extra multiplier on the whole pain formula.")
                 .defineInRange("painScale", 1.0D, 0.0D, 3.0D);
+        SOFT_PAIN_SCALE = b.comment("Pain multiplier for skin/fat/muscle only. Bone is untouched.",
+                        "Vanilla barely feels the soft layers because reaching bone costs only ~0.34 work.")
+                .defineInRange("softTissuePainScale", 2.5D, 0.1D, 8.0D);
         DECAY_SCALE = b.comment("How fast an abandoned cut closes. 1.0 = 1:1 with limb regeneration.")
                 .defineInRange("decayScale", 2.0D, 0.0D, 20.0D);
         BONE_RESISTANCE_SCALE = b.comment("Bone hardness. 1.0 = vanilla resistance 4.5.")
@@ -41,33 +53,50 @@ public final class BGConfig {
                 .defineInRange("maxWorkPerPacket", 0.25D, 0.05D, 2.0D);
         IDLE_TIMEOUT_TICKS = b.comment("Session closes after this many idle ticks. Progress is NEVER lost.")
                 .defineInRange("idleTimeoutTicks", 6000, 200, 72000);
-        FORCE_DEEP_WOUND = b.comment("Keep the cut registered as a deep wound so it can be stitched immediately.")
+        FORCE_DEEP_WOUND = b.comment("Keep the cut a deep wound so it can be stitched immediately.")
                 .define("forceDeepWound", true);
         b.pop();
 
-        b.comment("Vanilla phantom limb pain is brutal: episode = 18 + susceptibility(52..88) * 0.35..0.65 = 36..70 pain.")
+        b.comment("Vanilla phantom pain: 18 + susceptibility(52..88) * 0.35..0.65 = 36..70.")
                 .push("phantom");
-        PHANTOM_NERF = b.comment("Cap phantom pain / susceptibility / episode length for every amputation.")
-                .define("phantomNerf", true);
-        PHANTOM_SUS_CAP = b.comment("Vanilla sets 52..88 on amputation. Lower = weaker and rarer episodes.")
-                .defineInRange("phantomSusceptibilityCap", 24.0D, 0.0D, 88.0D);
-        PHANTOM_PAIN_CAP = b.comment("Hard ceiling for phantom pain during an episode (vanilla 36..70).")
-                .defineInRange("phantomPainCap", 12.0D, 0.0D, 100.0D);
-        PHANTOM_EPISODE_SECONDS = b.comment("Max episode length in seconds (vanilla 12..40).")
-                .defineInRange("phantomEpisodeSeconds", 8, 1, 60);
+        PHANTOM_NERF = b.define("phantomNerf", true);
+        PHANTOM_SUS_CAP = b.defineInRange("phantomSusceptibilityCap", 24.0D, 0.0D, 88.0D);
+        PHANTOM_PAIN_CAP = b.defineInRange("phantomPainCap", 12.0D, 0.0D, 100.0D);
+        PHANTOM_EPISODE_SECONDS = b.defineInRange("phantomEpisodeSeconds", 8, 1, 60);
+        b.pop();
+
+        b.comment("Stump aftercare. The stump wound lives on the PROXIMAL segment.",
+                        "Vanilla puts bleeding=100 there (2.4 L/min) and pins pain at ~90 for ~90 minutes.")
+                .push("aftercare");
+        STUMP_BLEED_SCALE = b.comment("Ceiling for stump bleed, as a fraction of vanilla 100.",
+                        "0.32 -> ~0.77 L/min (Casualties: Unknown uses 0.75). 1.0 = vanilla.")
+                .defineInRange("stumpBleedScale", 0.32D, 0.0D, 1.0D);
+        RESIDUAL_PAIN_CAP = b.comment("Ceiling for residual stump pain. 100 = vanilla.")
+                .defineInRange("residualPainCap", 40.0D, 0.0D, 100.0D);
+        STUMP_HEAL_BOOST = b.comment("Extra stump healing per second, works while bleeding at 35% rate.")
+                .defineInRange("stumpHealBoost", 3.0D, 0.0D, 20.0D);
         b.pop();
 
         b.push("fixes");
-        DROP_TOURNIQUET = b.comment("Drop the tourniquet as an item when the limb it sits on is removed.")
+        DROP_TOURNIQUET = b.comment("Drop the tourniquet when the limb it sits on is removed.")
                 .define("dropTourniquetOnLimbLoss", true);
-        BAG_PARTIAL = b.comment("Blood/saline bags keep their remaining volume instead of being destroyed on first use.",
-                        "When a bag runs dry it turns into an empty blood bag that can be refilled.")
+        BAG_PARTIAL = b.comment("Bags keep remaining volume instead of being destroyed on first use.")
                 .define("partialBagUse", true);
-        BARREL_FILL = b.comment("RMB with an empty bag (or a part-used saline bag) on a fluid barrel to fill/top it up.",
-                        "Accepts doomedmatu:saline and doomedmatu:ringersolution. Port of the old KubeJS script.")
+        BARREL_FILL = b.comment("RMB empty/part-used bag on a saline barrel to fill or top up.")
                 .define("barrelFill", true);
-        BARREL_MB = b.comment("Millibuckets drained from the barrel for one full bag.")
+        BARREL_MB = b.comment("Millibuckets drained for one full bag.")
                 .defineInRange("barrelMbPerBag", 500, 100, 4000);
+        OWN_DRAW = b.comment("Handle drawing blood into an empty bag ourselves, with explicit refusal messages.",
+                        "Vanilla requires >= 4.0 L and >= 80% RBC and silently does nothing on some paths.")
+                .define("ownBloodDraw", true);
+        DONATE_FLOOR = b.comment("Blood volume that must REMAIN after drawing, litres.")
+                .defineInRange("donateBloodFloor", 2.5D, 0.5D, 4.5D);
+        DONATE_RBC = b.comment("Minimum red cell fraction to donate (vanilla 0.8).")
+                .defineInRange("donateRbcMin", 0.5D, 0.1D, 1.0D);
+        DONATE_LITRES = b.comment("Litres drawn per bag (vanilla bag = 0.75 L).")
+                .defineInRange("donateLitres", 0.75D, 0.1D, 1.5D);
+        CLEAN_REFILL = b.comment("Clear the 'used before' contamination flag on a refilled bag.")
+                .define("cleanRefilledBag", true);
         b.pop();
         SPEC = b.build();
     }
@@ -78,9 +107,15 @@ public final class BGConfig {
     public static boolean bagPartialUse()     { return BAG_PARTIAL.get(); }
     public static boolean barrelFill()        { return BARREL_FILL.get(); }
     public static int barrelMbPerBag()        { return BARREL_MB.get(); }
+    public static boolean ownBloodDraw()      { return OWN_DRAW.get(); }
+    public static float donateBloodFloor()    { return (float) (double) DONATE_FLOOR.get(); }
+    public static float donateRbcMin()        { return (float) (double) DONATE_RBC.get(); }
+    public static float donateLitres()        { return (float) (double) DONATE_LITRES.get(); }
+    public static boolean cleanRefilledBag()  { return CLEAN_REFILL.get(); }
     public static float workPerSecond()       { return (float) (double) WORK_PER_SECOND.get(); }
     public static float bleedScale()          { return (float) (double) BLEED_SCALE.get(); }
     public static float painScale()           { return (float) (double) PAIN_SCALE.get(); }
+    public static float softTissuePainScale() { return (float) (double) SOFT_PAIN_SCALE.get(); }
     public static float decayScale()          { return (float) (double) DECAY_SCALE.get(); }
     public static float boneResistanceScale() { return (float) (double) BONE_RESISTANCE_SCALE.get(); }
     public static float maxWorkPerPacket()    { return (float) (double) MAX_WORK_PER_PACKET.get(); }
@@ -90,4 +125,7 @@ public final class BGConfig {
     public static float phantomSusceptibilityCap() { return (float) (double) PHANTOM_SUS_CAP.get(); }
     public static float phantomPainCap()      { return (float) (double) PHANTOM_PAIN_CAP.get(); }
     public static int phantomEpisodeSeconds() { return PHANTOM_EPISODE_SECONDS.get(); }
+    public static float stumpBleedScale()     { return (float) (double) STUMP_BLEED_SCALE.get(); }
+    public static float residualPainCap()     { return (float) (double) RESIDUAL_PAIN_CAP.get(); }
+    public static float stumpHealBoost()      { return (float) (double) STUMP_HEAL_BOOST.get(); }
 }

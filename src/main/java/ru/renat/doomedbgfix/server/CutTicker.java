@@ -13,6 +13,7 @@ public final class CutTicker {
         if (event.player instanceof ServerPlayer sp) {
             CutSessions.tick(sp);
             PhantomNerf.tick(sp, CutBridge.data(sp));
+            AmputationAftercare.tick(sp, CutBridge.data(sp));
         }
     }
 
