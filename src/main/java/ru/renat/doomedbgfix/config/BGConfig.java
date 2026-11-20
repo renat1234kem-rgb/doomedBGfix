@@ -2,6 +2,9 @@ package ru.renat.doomedbgfix.config;
 
 import net.minecraftforge.common.ForgeConfigSpec;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 public final class BGConfig {
     public static final ForgeConfigSpec SPEC;
     private static final ForgeConfigSpec.BooleanValue ENABLE_REWORK;
@@ -31,6 +34,11 @@ public final class BGConfig {
     private static final ForgeConfigSpec.DoubleValue DONATE_RBC;
     private static final ForgeConfigSpec.DoubleValue DONATE_LITRES;
     private static final ForgeConfigSpec.BooleanValue CLEAN_REFILL;
+    private static final ForgeConfigSpec.BooleanValue BANDAGE_PROGRESSIVE;
+    private static final ForgeConfigSpec.DoubleValue BANDAGE_CAPACITY;
+    private static final ForgeConfigSpec.DoubleValue BANDAGE_FULL_BONUS;
+    private static final ForgeConfigSpec.DoubleValue BANDAGE_QUALITY_DEFAULT;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> BANDAGE_PROFILES;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -53,9 +61,7 @@ public final class BGConfig {
                 .defineInRange("maxWorkPerPacket", 0.25D, 0.05D, 2.0D);
         IDLE_TIMEOUT_TICKS = b.comment("Session closes after this many idle ticks. Progress is NEVER lost.")
                 .defineInRange("idleTimeoutTicks", 6000, 200, 72000);
-        SAW_SOUND_MS = b.comment("Minimum gap between saw sounds, milliseconds.",
-                        "The sound only plays when the cut actually got deeper, never on idle sync packets.",
-                        "0 = no cooldown (old spammy behaviour).")
+        SAW_SOUND_MS = b.comment("Minimum gap between saw sounds, milliseconds. 0 = no cooldown.")
                 .defineInRange("sawSoundCooldownMs", 320, 0, 2000);
         FORCE_DEEP_WOUND = b.comment("Keep the cut registered as a deep wound so it can be stitched immediately.")
                 .define("forceDeepWound", true);
@@ -69,16 +75,43 @@ public final class BGConfig {
         PHANTOM_EPISODE_SECONDS = b.defineInRange("phantomEpisodeSeconds", 8, 1, 60);
         b.pop();
 
-        b.comment("Stump aftercare. The stump wound lives on the PROXIMAL segment.",
-                        "Vanilla puts bleeding=100 there and pins pain at ~90 for ~90 minutes.")
+        b.comment("Stump aftercare. The stump wound lives on the PROXIMAL segment.")
                 .push("aftercare");
         STUMP_BLEED_SCALE = b.comment("Ceiling for stump bleed, as a fraction of vanilla 100.",
-                        "0.28 -> ~1.20 L/min in game. 1.0 = vanilla (2.4 L/min).")
+                        "0.28 -> ~1.2 L/min. 1.0 = vanilla (2.4 L/min).")
                 .defineInRange("stumpBleedScale", 0.28D, 0.0D, 1.0D);
         RESIDUAL_PAIN_CAP = b.comment("Ceiling for residual stump pain. 100 = vanilla.")
                 .defineInRange("residualPainCap", 40.0D, 0.0D, 100.0D);
         STUMP_HEAL_BOOST = b.comment("Extra stump healing per second, works while bleeding at 35% rate.")
                 .defineInRange("stumpHealBoost", 3.0D, 0.0D, 20.0D);
+        b.pop();
+
+        b.comment("Bandages, calibrated after Casualties: Unknown.",
+                        "1 Doomed bleed unit ~ 0.024 L/min (measured: 100 units = 2.40 L/min).",
+                        "A full wrap stops 'capacity * quality' units; each turn stops its share.")
+                .push("bandage");
+        BANDAGE_PROGRESSIVE = b.comment("Enable per-wrap fixed bleeding stop. false = vanilla all-or-nothing.")
+                .define("progressiveBandageBleed", true);
+        BANDAGE_CAPACITY = b.comment("Bleeding units stopped by a FULL wrap of a quality-1.0 dressing.",
+                        "28 units ~ 0.67 L/min, i.e. the plain Doomed bandage in CU terms.")
+                .defineInRange("bandageCapacityBase", 28.0D, 0.0D, 200.0D);
+        BANDAGE_FULL_BONUS = b.comment("Extra units stopped instantly at 100% wrap, on top of the",
+                        "vanilla percentage effect. 0 = vanilla bonus only.")
+                .defineInRange("fullWrapBonusUnits", 0.0D, 0.0D, 100.0D);
+        BANDAGE_QUALITY_DEFAULT = b.comment("Quality for dressing items not listed in bandageProfiles.")
+                .defineInRange("bandageQualityDefault", 1.0D, 0.05D, 10.0D);
+        BANDAGE_PROFILES = b.comment("Quality per dressing (registry path). Multiplies stop power AND capacity.",
+                        "Values derived from CU: alginate/plastic 1.6, analgesic gauze 1.1,",
+                        "bandage/sterilized 1.0, ripped 0.4, single adhesive plaster 0.15.")
+                .defineList("bandageProfiles", List.of(
+                        "alginate=1.6",
+                        "plasticbandage=1.6",
+                        "analgesicgauze=1.1",
+                        "sterilizedbandage=1.0",
+                        "bandage=1.0",
+                        "rippeddressing=0.4",
+                        "adhesivebandage=0.15"
+                ), o -> o instanceof String);
         b.pop();
 
         b.push("fixes");
@@ -132,4 +165,11 @@ public final class BGConfig {
     public static float stumpBleedScale()     { return (float) (double) STUMP_BLEED_SCALE.get(); }
     public static float residualPainCap()     { return (float) (double) RESIDUAL_PAIN_CAP.get(); }
     public static float stumpHealBoost()      { return (float) (double) STUMP_HEAL_BOOST.get(); }
+    public static boolean bandageProgressive()      { return BANDAGE_PROGRESSIVE.get(); }
+    public static float bandageCapacityBase()       { return (float) (double) BANDAGE_CAPACITY.get(); }
+    public static float bandageFullWrapBonusUnits() { return (float) (double) BANDAGE_FULL_BONUS.get(); }
+    public static float bandageQualityDefault()     { return (float) (double) BANDAGE_QUALITY_DEFAULT.get(); }
+    public static List<String> bandageProfiles() {
+        return BANDAGE_PROFILES.get().stream().map(Object::toString).collect(Collectors.toList());
+    }
 }
