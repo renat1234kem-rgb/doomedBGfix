@@ -9,14 +9,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import ru.renat.doomedbgfix.config.BGConfig;
 
 /**
- * Ваниль считает одетую рану небинтуемой, из-за чего второй бинт на ещё
- * кровящую повязку мгновенно закрывает мини-игру. Разрешаем повторное
- * бинтование, пока одетая рана кровит выше порога dressedResidualBleedUnits.
+ * Позволяет повторно бинтовать одетую рану, пока она кровит выше порога.
+ * require = 0: если сигнатура isDressable в другой версии мода отличается,
+ * инъекция просто не применится (фича выключится), но игра НЕ упадёт.
  */
 @Mixin(value = WoundLedgerService.class, remap = false)
 public abstract class WoundLedgerServiceBandageMixin {
 
-    @Inject(method = "isDressable", at = @At("RETURN"), cancellable = true, remap = false)
+    @Inject(method = "isDressable", at = @At("RETURN"), cancellable = true, require = 0, remap = false)
     private static void bg$allowRebandage(WoundRecord wound, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) return;
         if (wound == null) return;
