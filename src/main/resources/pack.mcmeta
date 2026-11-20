@@ -1,1 +1,6 @@
-{ "pack": { "description": "${mod_name} resources", "pack_format": 15 } }
+{
+  "pack": {
+    "description": "Doomed Traits Additions resources",
+    "pack_format": 15
+  }
+}
