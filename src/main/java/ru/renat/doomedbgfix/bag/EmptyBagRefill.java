@@ -23,7 +23,8 @@ import java.util.Locale;
 
 /**
  * Свой набор крови в пустой пакет: ванильный у тебя молча ничего не делал.
- * Всегда пишем либо результат, либо конкретную причину отказа.
+ * Объём в сообщении берём из ЁМКОСТИ пакета (capacityMl), а не из тега,
+ * поэтому "750 ml (0.75 L)" и "Drawn 0.75 L" всегда согласованы.
  */
 public final class EmptyBagRefill {
 
@@ -90,9 +91,7 @@ public final class EmptyBagRefill {
         if (!sp.isCreative()) stack.shrink(1);
         BagVolume.give(sp, full);
 
-        // ФИКС: объём пакета и снятая кровь считаем из одного места и подписываем явно,
-        // чтобы не было больше "500 ml, 0.75 L".
-        int ml = BagVolume.realMl(full);
+        int ml = BagVolume.capacityMl(full);
         say(sp, String.format(Locale.ROOT, "Filled %s bag: %d ml (%.2f L). Drawn from you: %.2f L.",
                 type.label(), ml, ml / 1000f, litres));
         DoomedDataUtil.sync(sp);

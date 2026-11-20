@@ -5,33 +5,47 @@ import net.mattlives.doomedmatu.capability.DoomedData;
 import net.mattlives.doomedmatu.item.BloodBagItem;
 import net.mattlives.doomedmatu.item.FluidSyringeItem;
 import net.mattlives.doomedmatu.registry.DoomedItems;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.registries.ForgeRegistries;
 
 /**
- * Остаток пакета в единицах мода: 100 = полный пакет.
- * Объём считаем из ОДНОГО источника истины, чтобы тултип, сообщение и
- * физиология не разъезжались (было "500 ml, 0.75 L").
+ * Остаток пакета в наших единицах: 100 = полный.
+ * Тип пакета определяем по registry-имени (bloodbaghuman / saline).
+ * Когда пакет выжат досуха, он ВСЕГДА возвращается пустым пакетом:
+ * после крови - заражённым, после физраствора - стерильным.
  */
 public final class BagVolume {
 
     public static final String TAG = "BGFixBagMl";
     public static final int FULL = 100;
 
-    /** Совпадает с константами Doomed: BloodBagItem = 0.75 L, SalineItem = 0.5 L. */
+    /** Совпадает с константами Doomed: кровяной пакет 0.75 L, физраствор 0.5 L. */
     public static final float BLOOD_LITRES = 0.75f;
     public static final float SALINE_LITRES = 0.5f;
 
     private BagVolume() {}
 
+    public static String path(ItemStack s) {
+        if (s == null || s.isEmpty()) return "";
+        ResourceLocation id = ForgeRegistries.ITEMS.getKey(s.getItem());
+        return id == null ? "" : id.getPath();
+    }
+
     public static boolean isBlood(ItemStack s) {
-        if (s.isEmpty()) return false;
-        // instanceof + явная проверка id: раньше пакет иногда падал в ветку физраствора
-        return s.getItem() instanceof BloodBagItem || s.is(DoomedItems.BLOOD_BAG_HUMAN.get());
+        if (s == null || s.isEmpty()) return false;
+        if (s.getItem() instanceof BloodBagItem) return true;
+        return "bloodbaghuman".equals(path(s));
+    }
+
+    public static boolean isSaline(ItemStack s) {
+        if (s == null || s.isEmpty()) return false;
+        return "saline".equals(path(s));
     }
 
     public static boolean isBag(ItemStack s) {
-        return !s.isEmpty() && (isBlood(s) || s.is(DoomedItems.SALINE.get()));
+        return isBlood(s) || isSaline(s);
     }
 
     public static int get(ItemStack s) {
@@ -53,14 +67,14 @@ public final class BagVolume {
         return Math.round(litresFull(s) * 1000f);
     }
 
-    /** Реальный остаток в миллилитрах. */
     public static int realMl(ItemStack s) {
         return Math.round(capacityMl(s) * get(s) / (float) FULL);
     }
 
     /**
-     * Списывает use единиц. Стек-safe: если пакетов несколько, отделяем один,
-     * чтобы не испортить объём остальным. Когда пакет пуст - выдаём пустой пакет.
+     * Списывает use единиц. Стек-safe: при стеке >1 отделяем один предмет.
+     * Когда остаток доходит до 0, пакет заменяется пустым:
+     * кровь -> заражённый пустой пакет, физраствор -> стерильный пустой пакет.
      */
     public static void consume(ServerPlayer player, DoomedData patient, ItemStack stack, int use) {
         int left = Math.max(0, get(stack) - use);
@@ -85,12 +99,15 @@ public final class BagVolume {
         if (blood) {
             FluidSyringeItem.setContaminated(empty, true);
             FluidSyringeItem.addBloodPathogens(empty, mask | ContagionHandler.bloodPathogenMask(patient));
+        } else {
+            // физраствор стерилен: пустой пакет после него чистый
+            FluidSyringeItem.setContaminated(empty, false);
         }
         give(player, empty);
     }
 
     public static void give(ServerPlayer player, ItemStack stack) {
-        if (stack.isEmpty()) return;
+        if (stack == null || stack.isEmpty()) return;
         if (!player.getInventory().add(stack)) player.drop(stack, false);
     }
 }
