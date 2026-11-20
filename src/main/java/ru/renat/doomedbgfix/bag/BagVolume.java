@@ -12,16 +12,14 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 /**
  * Остаток пакета в наших единицах: 100 = полный.
- * Тип пакета определяем по registry-имени (bloodbaghuman / saline).
- * Когда пакет выжат досуха, он ВСЕГДА возвращается пустым пакетом:
- * после крови - заражённым, после физраствора - стерильным.
+ * Кровяной пакет определяем максимально устойчиво: instanceof, registry-имя
+ * (bloodbag*, кроме empty*) и имя класса - чтобы ёмкость больше не путалась с физраствором.
  */
 public final class BagVolume {
 
     public static final String TAG = "BGFixBagMl";
     public static final int FULL = 100;
 
-    /** Совпадает с константами Doomed: кровяной пакет 0.75 L, физраствор 0.5 L. */
     public static final float BLOOD_LITRES = 0.75f;
     public static final float SALINE_LITRES = 0.5f;
 
@@ -36,7 +34,10 @@ public final class BagVolume {
     public static boolean isBlood(ItemStack s) {
         if (s == null || s.isEmpty()) return false;
         if (s.getItem() instanceof BloodBagItem) return true;
-        return "bloodbaghuman".equals(path(s));
+        String p = path(s);
+        if (p.isEmpty() || p.startsWith("empty")) return false;
+        if (p.contains("bloodbag")) return true;
+        return s.getItem().getClass().getSimpleName().contains("BloodBag");
     }
 
     public static boolean isSaline(ItemStack s) {
@@ -72,9 +73,8 @@ public final class BagVolume {
     }
 
     /**
-     * Списывает use единиц. Стек-safe: при стеке >1 отделяем один предмет.
-     * Когда остаток доходит до 0, пакет заменяется пустым:
-     * кровь -> заражённый пустой пакет, физраствор -> стерильный пустой пакет.
+     * Списывает use единиц. Когда пакет выжат досуха, он ВСЕГДА возвращается
+     * пустым пакетом: после крови - заражённым, после физраствора - стерильным.
      */
     public static void consume(ServerPlayer player, DoomedData patient, ItemStack stack, int use) {
         int left = Math.max(0, get(stack) - use);
@@ -100,7 +100,6 @@ public final class BagVolume {
             FluidSyringeItem.setContaminated(empty, true);
             FluidSyringeItem.addBloodPathogens(empty, mask | ContagionHandler.bloodPathogenMask(patient));
         } else {
-            // физраствор стерилен: пустой пакет после него чистый
             FluidSyringeItem.setContaminated(empty, false);
         }
         give(player, empty);

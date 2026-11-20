@@ -5,6 +5,7 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import ru.renat.doomedbgfix.bag.BagSweeper;
+import ru.renat.doomedbgfix.bandage.BandageRework;
 
 public final class CutTicker {
 
@@ -15,6 +16,7 @@ public final class CutTicker {
             CutSessions.tick(sp);
             PhantomNerf.tick(sp, CutBridge.data(sp));
             AmputationAftercare.tick(sp, CutBridge.data(sp));
+            BandageRework.tick(sp, CutBridge.data(sp));
             BagSweeper.tick(sp);
         }
     }

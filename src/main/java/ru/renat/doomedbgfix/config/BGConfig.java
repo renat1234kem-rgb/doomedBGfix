@@ -38,6 +38,7 @@ public final class BGConfig {
     private static final ForgeConfigSpec.DoubleValue BANDAGE_CAPACITY;
     private static final ForgeConfigSpec.DoubleValue BANDAGE_FULL_BONUS;
     private static final ForgeConfigSpec.DoubleValue BANDAGE_QUALITY_DEFAULT;
+    private static final ForgeConfigSpec.DoubleValue DRESSED_RESIDUAL;
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> BANDAGE_PROFILES;
 
     static {
@@ -87,8 +88,7 @@ public final class BGConfig {
         b.pop();
 
         b.comment("Bandages, calibrated after Casualties: Unknown.",
-                        "1 Doomed bleed unit ~ 0.024 L/min (measured: 100 units = 2.40 L/min).",
-                        "A full wrap stops 'capacity * quality' units; each turn stops its share.")
+                        "1 Doomed bleed unit ~ 0.024 L/min (measured: 100 units = 2.40 L/min).")
                 .push("bandage");
         BANDAGE_PROGRESSIVE = b.comment("Enable per-wrap fixed bleeding stop. false = vanilla all-or-nothing.")
                 .define("progressiveBandageBleed", true);
@@ -100,9 +100,12 @@ public final class BGConfig {
                 .defineInRange("fullWrapBonusUnits", 0.0D, 0.0D, 100.0D);
         BANDAGE_QUALITY_DEFAULT = b.comment("Quality for dressing items not listed in bandageProfiles.")
                 .defineInRange("bandageQualityDefault", 1.0D, 0.05D, 10.0D);
-        BANDAGE_PROFILES = b.comment("Quality per dressing (registry path). Multiplies stop power AND capacity.",
-                        "Values derived from CU: alginate/plastic 1.6, analgesic gauze 1.1,",
-                        "bandage/sterilized 1.0, ripped 0.4, single adhesive plaster 0.15.")
+        DRESSED_RESIDUAL = b.comment("Residual bleed handling for ALREADY DRESSED wounds, in bleed units.",
+                        "At or below this value the seep under the dressing clots to 0 once per second.",
+                        "Above it the wound stays re-bandageable (second bandage on top).",
+                        "4 units ~ 0.1 L/min. 0 disables both behaviours.")
+                .defineInRange("dressedResidualBleedUnits", 4.0D, 0.0D, 50.0D);
+        BANDAGE_PROFILES = b.comment("Quality per dressing (registry path). Multiplies stop power AND capacity.")
                 .defineList("bandageProfiles", List.of(
                         "alginate=1.6",
                         "plasticbandage=1.6",
@@ -169,6 +172,7 @@ public final class BGConfig {
     public static float bandageCapacityBase()       { return (float) (double) BANDAGE_CAPACITY.get(); }
     public static float bandageFullWrapBonusUnits() { return (float) (double) BANDAGE_FULL_BONUS.get(); }
     public static float bandageQualityDefault()     { return (float) (double) BANDAGE_QUALITY_DEFAULT.get(); }
+    public static float dressedResidualBleedUnits() { return (float) (double) DRESSED_RESIDUAL.get(); }
     public static List<String> bandageProfiles() {
         return BANDAGE_PROFILES.get().stream().map(Object::toString).collect(Collectors.toList());
     }

@@ -22,9 +22,9 @@ import ru.renat.doomedbgfix.server.CutBridge;
 import java.util.Locale;
 
 /**
- * Свой набор крови в пустой пакет: ванильный у тебя молча ничего не делал.
- * Объём в сообщении берём из ЁМКОСТИ пакета (capacityMl), а не из тега,
- * поэтому "750 ml (0.75 L)" и "Drawn 0.75 L" всегда согласованы.
+ * Свой набор крови в пустой пакет. Объём в сообщении берётся ИЗ ФАКТА СНЯТИЯ
+ * (donateLitres), а не из определения типа пакета, поэтому цифры всегда сходятся:
+ * 0.75 L снято = 750 ml в пакете.
  */
 public final class EmptyBagRefill {
 
@@ -39,7 +39,6 @@ public final class EmptyBagRefill {
 
     @SubscribeEvent(priority = EventPriority.LOW)
     public void onUseBlock(PlayerInteractEvent.RightClickBlock event) {
-        // бочки с физраствором обслуживает BarrelFill
         if (event.getLevel().getBlockEntity(event.getPos()) instanceof FluidBarrelBlockEntity) return;
         handle(event.getLevel(), event.getEntity() instanceof ServerPlayer sp ? sp : null,
                 event.getHand(), event.getItemStack());
@@ -91,7 +90,7 @@ public final class EmptyBagRefill {
         if (!sp.isCreative()) stack.shrink(1);
         BagVolume.give(sp, full);
 
-        int ml = BagVolume.capacityMl(full);
+        int ml = Math.round(litres * 1000f);
         say(sp, String.format(Locale.ROOT, "Filled %s bag: %d ml (%.2f L). Drawn from you: %.2f L.",
                 type.label(), ml, ml / 1000f, litres));
         DoomedDataUtil.sync(sp);
