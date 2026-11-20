@@ -16,15 +16,16 @@ import net.minecraft.world.level.Level;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import ru.renat.doomedbgfix.DoomedBGFix;
 import ru.renat.doomedbgfix.config.BGConfig;
 import ru.renat.doomedbgfix.server.CutBridge;
 
 import java.util.Locale;
 
 /**
- * Свой набор крови в пустой пакет. Объём в сообщении берётся ИЗ ФАКТА СНЯТИЯ
- * (donateLitres), а не из определения типа пакета, поэтому цифры всегда сходятся:
- * 0.75 L снято = 750 ml в пакете.
+ * Свой набор крови в пустой пакет. В сообщении всегда печатается маркер версии:
+ * если в игре его нет - работает старый jar, а не этот код.
+ * В лог пишется диагностика определения пакета (path / isBlood / capacity).
  */
 public final class EmptyBagRefill {
 
@@ -90,9 +91,13 @@ public final class EmptyBagRefill {
         if (!sp.isCreative()) stack.shrink(1);
         BagVolume.give(sp, full);
 
+        DoomedBGFix.LOGGER.info("[doomedbgfix] refill: path={} isBlood={} isBag={} capacityMl={} realMl={}",
+                BagVolume.path(full), BagVolume.isBlood(full), BagVolume.isBag(full),
+                BagVolume.capacityMl(full), BagVolume.realMl(full));
+
         int ml = Math.round(litres * 1000f);
-        say(sp, String.format(Locale.ROOT, "Filled %s bag: %d ml (%.2f L). Drawn from you: %.2f L.",
-                type.label(), ml, ml / 1000f, litres));
+        say(sp, String.format(Locale.ROOT, "Filled %s bag: %d ml (%.2f L). Drawn from you: %.2f L. [bgfix %s]",
+                type.label(), ml, ml / 1000f, litres, DoomedBGFix.VERSION));
         DoomedDataUtil.sync(sp);
     }
 

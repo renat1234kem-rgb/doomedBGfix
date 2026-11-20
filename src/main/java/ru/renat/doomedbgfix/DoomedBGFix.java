@@ -19,6 +19,7 @@ import ru.renat.doomedbgfix.server.CutTicker;
 @Mod(DoomedBGFix.MODID)
 public final class DoomedBGFix {
     public static final String MODID = "doomedbgfix";
+    public static final String VERSION = "0.3.2";
     public static final Logger LOGGER = LogManager.getLogger("doomedbgfix");
 
     public DoomedBGFix() {
@@ -30,6 +31,6 @@ public final class DoomedBGFix {
         MinecraftForge.EVENT_BUS.register(new BarrelFill());
         MinecraftForge.EVENT_BUS.register(new BagTooltip());
         MinecraftForge.EVENT_BUS.register(new EmptyBagRefill());
-        LOGGER.info("[doomedbgfix] amputation rework + bag fixes armed (v0.2.2)");
+        LOGGER.info("[doomedbgfix] v{} armed: cut rework, bags, stump aftercare, bandages", VERSION);
     }
 }
