@@ -1,11 +1,9 @@
 {
   "parent": "item/generated",
-  "textures": {
-    "layer0": "doomedmatu:item/bloodbaghuman"
-  },
+  "textures": { "layer0": "doomedmatu:item/bloodbaghuman" },
   "overrides": [
-    { "predicate": { "doomedbgfix:bag_fill": 0.25 }, "model": "doomedbgfix:item/bloodbaghuman_25" },
-    { "predicate": { "doomedbgfix:bag_fill": 0.50 }, "model": "doomedbgfix:item/bloodbaghuman_50" },
-    { "predicate": { "doomedbgfix:bag_fill": 0.75 }, "model": "doomedbgfix:item/bloodbaghuman_75" }
+    { "predicate": { "doomedbgfix:bag_used": 0.2 }, "model": "doomedbgfix:item/bloodbaghuman_75" },
+    { "predicate": { "doomedbgfix:bag_used": 0.5 }, "model": "doomedbgfix:item/bloodbaghuman_50" },
+    { "predicate": { "doomedbgfix:bag_used": 0.8 }, "model": "doomedbgfix:item/bloodbaghuman_25" }
   ]
 }

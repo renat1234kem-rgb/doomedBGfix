@@ -30,3 +30,10 @@ Add-on for Doomed (doomedmatu). Adds extra flaws to the trait selection screen.
     versionRange="[0.4.7,0.5)"
     ordering="AFTER"
     side="BOTH"
+
+[[dependencies.doomedbgfix]]
+    modId="doomedmatu"
+    mandatory=true
+    versionRange="[0.4.7,)"
+    ordering="AFTER"
+    side="BOTH"
