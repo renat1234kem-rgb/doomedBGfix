@@ -1,0 +1,11 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "doomedmatu:item/saline"
+  },
+  "overrides": [
+    { "predicate": { "doomedbgfix:bag_fill": 0.25 }, "model": "doomedbgfix:item/saline_25" },
+    { "predicate": { "doomedbgfix:bag_fill": 0.50 }, "model": "doomedbgfix:item/saline_50" },
+    { "predicate": { "doomedbgfix:bag_fill": 0.75 }, "model": "doomedbgfix:item/saline_75" }
+  ]
+}

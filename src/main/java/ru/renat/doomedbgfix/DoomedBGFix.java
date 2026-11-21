@@ -8,6 +8,7 @@ import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import ru.renat.doomedbgfix.bag.BagSweeper;
 import ru.renat.doomedbgfix.bag.BagTooltip;
 import ru.renat.doomedbgfix.bag.BarrelFill;
 import ru.renat.doomedbgfix.bag.EmptyBagRefill;
