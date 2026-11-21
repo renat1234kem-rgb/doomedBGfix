@@ -1,6 +1,8 @@
 {
   "parent": "item/generated",
-  "textures": { "layer0": "doomedmatu:item/bloodbaghuman" },
+  "textures": {
+    "layer0": "doomedmatu:item/bloodbaghuman"
+  },
   "overrides": [
     { "predicate": { "doomedbgfix:bag_used": 0.2 }, "model": "doomedbgfix:item/bloodbaghuman_75" },
     { "predicate": { "doomedbgfix:bag_used": 0.5 }, "model": "doomedbgfix:item/bloodbaghuman_50" },
