@@ -25,6 +25,14 @@ public abstract class DismemberServiceMixin {
     private static void bg$openSelf(ServerPlayer player, BodyPart part, boolean forceInteractive,
                                     CallbackInfoReturnable<Boolean> cir) {
         if (!BGConfig.enableRework()) return;
+
+        // Отдельная ветка для глаз: пока отключаем стандартную мини-игру,
+        // чтобы не крашилось (требует доработки: создание сессии и отправка пакета).
+        if (part == BodyPart.EYE_LEFT || part == BodyPart.EYE_RIGHT) {
+            cir.setReturnValue(false);
+            return;
+        }
+
         cir.setReturnValue(CutSessions.openSelf(player, part, forceInteractive));
     }
 
@@ -63,14 +71,5 @@ public abstract class DismemberServiceMixin {
     @Inject(method = "gibHead", at = @At("HEAD"), remap = false)
     private static void bg$headStrap(ServerPlayer sp, DoomedData d, CallbackInfo ci) {
         TourniquetFix.releaseHead(sp, d);
-            @Inject(method = "openSelfMinigame", at = @At("HEAD"), cancellable = true, remap = false)
-    private static void bg$openEyeAmputation(ServerPlayer player, BodyPart part, boolean forceInteractive,
-                                              CallbackInfoReturnable<Boolean> cir) {
-        if (!BGConfig.enableRework()) return;
-        if (part != BodyPart.EYE_LEFT && part != BodyPart.EYE_RIGHT) return;
-        // Открываем мини-игру ампутации глаза вместо обычной
-        // (требует доработки: создание сессии и отправка пакета)
-        cir.setReturnValue(false); // пока отключаем, чтобы не крашилось
-    }
     }
 }
