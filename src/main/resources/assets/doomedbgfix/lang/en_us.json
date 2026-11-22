@@ -14,5 +14,9 @@
   "doomedbgfix.cut.tq.bad": "Tourniquet is BELOW the cut - useless",
   "doomedbgfix.cut.tq.none": "No tourniquet - heavy bleeding",
   "doomedbgfix.cut.fracture": "Bone fractured",
-  "doomedbgfix.cut.severed": "Limb severed"
+  "doomedbgfix.cut.severed": "Limb severed",
+  "item.doomedbgfix.eye_implant": "Eye Implant",
+  "item.doomedbgfix.empty_eye_implant": "Empty Eye Implant",
+  "doomedbgfix.eye.amputation.title": "Eye Amputation",
+  "doomedbgfix.eye.amputation.hint": "Carefully cut the conjunctiva and sever the optic nerve"
 }

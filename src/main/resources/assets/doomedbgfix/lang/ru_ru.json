@@ -14,5 +14,9 @@
   "doomedbgfix.cut.tq.bad": "Жгут НИЖЕ реза - не поможет",
   "doomedbgfix.cut.tq.none": "Жгута нет - будет сильное кровотечение",
   "doomedbgfix.cut.fracture": "Кость сломана",
-  "doomedbgfix.cut.severed": "Конечность отделена"
+  "doomedbgfix.cut.severed": "Конечность отделена",
+  "item.doomedbgfix.eye_implant": "Глазной имплант",
+  "item.doomedbgfix.empty_eye_implant": "Пустой глазной имплант",
+  "doomedbgfix.eye.amputation.title": "Ампутация глаза",
+  "doomedbgfix.eye.amputation.hint": "Аккуратно разрежь конъюнктиву и перережь зрительный нерв"
 }

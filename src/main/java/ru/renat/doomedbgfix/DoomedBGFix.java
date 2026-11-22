@@ -33,5 +33,6 @@ public final class DoomedBGFix {
         MinecraftForge.EVENT_BUS.register(new BagTooltip());
         MinecraftForge.EVENT_BUS.register(new EmptyBagRefill());
         LOGGER.info("[doomedbgfix] v{} armed: cut rework, bags, stump aftercare, bandages", VERSION);
+        ru.renat.doomedbgfix.registry.EyeItems.register(modBus);    
     }
 }

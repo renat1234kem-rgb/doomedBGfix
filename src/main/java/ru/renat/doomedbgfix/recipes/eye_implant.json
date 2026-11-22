@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " G ",
+    "IPI",
+    " G "
+  ],
+  "key": {
+    "G": { "item": "minecraft:glass_pane" },
+    "I": { "item": "minecraft:iron_nugget" },
+    "P": { "item": "doomedbgfix:empty_eye_implant" }
+  },
+  "result": {
+    "item": "doomedbgfix:eye_implant",
+    "count": 1
+  }
+}
