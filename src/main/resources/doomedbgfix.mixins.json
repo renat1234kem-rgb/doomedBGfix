@@ -9,10 +9,12 @@
     "DrugServiceMixin",
     "CoopMedicalMixin",
     "CoopMedicalBandageMixin",
-    "WoundLedgerServiceBandageMixin"
+    "WoundLedgerServiceBandageMixin",
+    "CoopMedicalEyeMixin"
   ],
   "client": [
-    "PuppetSpritesMixin"
+    "PuppetSpritesMixin",
+    "StatusPanelScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 0

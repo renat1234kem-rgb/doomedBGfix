@@ -3,6 +3,7 @@ package ru.renat.doomedbgfix.client;
 import net.mattlives.doomedmatu.body.BodyPart;
 import net.mattlives.doomedmatu.client.ClientDoomedData;
 import net.mattlives.doomedmatu.client.puppet.PuppetSprites;
+import net.mattlives.doomedmatu.client.screen.WitnessPatientScanScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -31,6 +32,9 @@ public final class CyberEyeSprites {
     /** @return спрайт импланта или null, если на этом глазу импланта нет (тогда Doomed рисует свой). */
     public static PuppetSprites.BodySpr forEye(BodyPart part, String styleDir) {
         if (part != BodyPart.EYE_LEFT && part != BodyPart.EYE_RIGHT) return null;
+        // При осмотре другого игрока (Witness) ClientDoomedData описывает НАС, а не пациента,
+        // поэтому свой имплант там показывать нельзя.
+        if (Minecraft.getInstance().screen instanceof WitnessPatientScanScreen) return null;
         if (ClientDoomedData.isLimbDismembered(part)) return null;
         if (ClientDoomedData.getLimbProstheticTier(part) != EyeImplantHandler.IMPLANT_TIER) return null;
 

@@ -12,7 +12,7 @@ import java.util.Optional;
 
 public final class BGNetwork {
 
-    private static final String PROTOCOL = "1";
+    private static final String PROTOCOL = "2";
     public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(new ResourceLocation(DoomedBGFix.MODID, "cut"))
             .networkProtocolVersion(() -> PROTOCOL)
@@ -32,6 +32,12 @@ public final class BGNetwork {
                 S2COpenCutPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(id++, S2CCutStatePacket.class, S2CCutStatePacket::encode, S2CCutStatePacket::decode,
                 S2CCutStatePacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, C2SEyeCutWorkPacket.class, C2SEyeCutWorkPacket::encode, C2SEyeCutWorkPacket::decode,
+                C2SEyeCutWorkPacket::handle, Optional.of(NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(id++, S2COpenEyeCutPacket.class, S2COpenEyeCutPacket::encode, S2COpenEyeCutPacket::decode,
+                S2COpenEyeCutPacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, S2CEyeCutStatePacket.class, S2CEyeCutStatePacket::encode, S2CEyeCutStatePacket::decode,
+                S2CEyeCutStatePacket::handle, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 
     public static void sendOpen(ServerPlayer player, S2COpenCutPacket packet) {
@@ -41,6 +47,16 @@ public final class BGNetwork {
     public static void sendState(ServerPlayer player, S2CCutStatePacket packet) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
     }
+
+    public static void sendOpenEye(ServerPlayer player, S2COpenEyeCutPacket packet) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
+    }
+
+    public static void sendEyeState(ServerPlayer player, S2CEyeCutStatePacket packet) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
+    }
+
+    public static void sendEyeWork(C2SEyeCutWorkPacket packet) { CHANNEL.sendToServer(packet); }
 
     public static void sendWork(C2SCutWorkPacket packet) { CHANNEL.sendToServer(packet); }
     public static void sendStop(C2SCutStopPacket packet) { CHANNEL.sendToServer(packet); }

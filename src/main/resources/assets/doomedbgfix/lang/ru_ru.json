@@ -21,5 +21,12 @@
   "doomedbgfix.eye.amputation.hint": "Аккуратно разрежь конъюнктиву и перережь зрительный нерв",
   "doomedbgfix.eye.implant.not_doomed": "Это можно использовать только в режиме Doomed.",
   "doomedbgfix.eye.implant.no_empty_socket": "Нет пустой глазницы, куда можно вставить имплант.",
-  "doomedbgfix.eye.implant.installed": "Глазной имплант установлен."
+  "doomedbgfix.eye.implant.installed": "Глазной имплант установлен.",
+  "doomedbgfix.eye.cut.title": "Удаление глаза",
+  "doomedbgfix.eye.cut.stage.0": "Надрез вокруг глаза",
+  "doomedbgfix.eye.cut.stage.1": "Перерезать мышцы глаза",
+  "doomedbgfix.eye.cut.stage.2": "Перерезать зрительный нерв",
+  "doomedbgfix.eye.cut.hint.0": "Зажмите ЛКМ и ведите скальпелем по ободку глаза",
+  "doomedbgfix.eye.cut.hint.1": "Водите скальпелем поперёк каждой мышцы туда-сюда",
+  "doomedbgfix.eye.cut.hint.2": "Режьте поперёк зрительного нерва внизу"
 }

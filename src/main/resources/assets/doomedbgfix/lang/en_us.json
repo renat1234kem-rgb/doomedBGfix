@@ -21,5 +21,12 @@
   "doomedbgfix.eye.amputation.hint": "Carefully cut the conjunctiva and sever the optic nerve",
   "doomedbgfix.eye.implant.not_doomed": "You need to be Doomed to use this.",
   "doomedbgfix.eye.implant.no_empty_socket": "There is no empty eye socket to fit an implant into.",
-  "doomedbgfix.eye.implant.installed": "Eye implant installed."
+  "doomedbgfix.eye.implant.installed": "Eye implant installed.",
+  "doomedbgfix.eye.cut.title": "Eye removal",
+  "doomedbgfix.eye.cut.stage.0": "Cut around the eye",
+  "doomedbgfix.eye.cut.stage.1": "Sever the eye muscles",
+  "doomedbgfix.eye.cut.stage.2": "Cut the optic nerve",
+  "doomedbgfix.eye.cut.hint.0": "Hold LMB and trace the scalpel around the rim of the eye",
+  "doomedbgfix.eye.cut.hint.1": "Saw back and forth across each muscle",
+  "doomedbgfix.eye.cut.hint.2": "Cut across the optic nerve at the bottom"
 }

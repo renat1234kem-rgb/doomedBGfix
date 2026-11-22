@@ -14,6 +14,7 @@ public final class CutTicker {
         if (event.phase != TickEvent.Phase.END) return;
         if (event.player instanceof ServerPlayer sp) {
             CutSessions.tick(sp);
+            EyeCutSessions.tick(sp);
             PhantomNerf.tick(sp, CutBridge.data(sp));
             AmputationAftercare.tick(sp, CutBridge.data(sp));
             BandageRework.tick(sp, CutBridge.data(sp));
@@ -24,5 +25,6 @@ public final class CutTicker {
     @SubscribeEvent
     public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         CutSessions.forget(event.getEntity().getUUID());
+        EyeCutSessions.forget(event.getEntity().getUUID());
     }
 }
