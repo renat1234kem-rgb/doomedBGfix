@@ -18,5 +18,8 @@
   "item.doomedbgfix.eye_implant": "Глазной имплант",
   "item.doomedbgfix.empty_eye_implant": "Пустой глазной имплант",
   "doomedbgfix.eye.amputation.title": "Ампутация глаза",
-  "doomedbgfix.eye.amputation.hint": "Аккуратно разрежь конъюнктиву и перережь зрительный нерв"
+  "doomedbgfix.eye.amputation.hint": "Аккуратно разрежь конъюнктиву и перережь зрительный нерв",
+  "doomedbgfix.eye.implant.not_doomed": "Это можно использовать только в режиме Doomed.",
+  "doomedbgfix.eye.implant.no_empty_socket": "Нет пустой глазницы, куда можно вставить имплант.",
+  "doomedbgfix.eye.implant.installed": "Глазной имплант установлен."
 }

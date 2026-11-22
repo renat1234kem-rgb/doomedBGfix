@@ -26,13 +26,6 @@ public abstract class DismemberServiceMixin {
                                     CallbackInfoReturnable<Boolean> cir) {
         if (!BGConfig.enableRework()) return;
 
-        // Отдельная ветка для глаз: пока отключаем стандартную мини-игру,
-        // чтобы не крашилось (требует доработки: создание сессии и отправка пакета).
-        if (part == BodyPart.EYE_LEFT || part == BodyPart.EYE_RIGHT) {
-            cir.setReturnValue(false);
-            return;
-        }
-
         cir.setReturnValue(CutSessions.openSelf(player, part, forceInteractive));
     }
 

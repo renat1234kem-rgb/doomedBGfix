@@ -11,7 +11,9 @@
     "CoopMedicalBandageMixin",
     "WoundLedgerServiceBandageMixin"
   ],
-  "client": [],
+  "client": [
+    "PuppetSpritesMixin"
+  ],
   "injectors": {
     "defaultRequire": 0
   }

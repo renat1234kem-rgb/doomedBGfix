@@ -1,8 +1,7 @@
 package ru.renat.doomedbgfix.eye;
 
 import net.mattlives.doomedmatu.body.BodyPart;
-import net.mattlives.doomedmatu.body.DoomedData;
-import net.mattlives.doomedmatu.body.LimbData;
+import net.mattlives.doomedmatu.capability.DoomedData;
 import net.mattlives.doomedmatu.capability.DoomedDataUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,45 +20,28 @@ public class EyeImplantItem extends Item {
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        if (level.isClientSide) return InteractionResultHolder.success(player.getItemInHand(hand));
-        if (!(player instanceof ServerPlayer sp)) return InteractionResultHolder.fail(player.getItemInHand(hand));
+        ItemStack stack = player.getItemInHand(hand);
+        if (level.isClientSide) return InteractionResultHolder.success(stack);
+        if (!(player instanceof ServerPlayer sp)) return InteractionResultHolder.fail(stack);
 
-        DoomedData data = DoomedDataUtil.get(player).orElse(null);
+        DoomedData data = DoomedDataUtil.get(sp).orElse(null);
         if (data == null || !data.isActive()) {
-            sp.displayClientMessage(Component.literal("You need to be Doomed to use this."), true);
-            return InteractionResultHolder.fail(player.getItemInHand(hand));
+            sp.displayClientMessage(Component.translatable("doomedbgfix.eye.implant.not_doomed"), true);
+            return InteractionResultHolder.fail(stack);
         }
 
-        // Проверяем, есть ли ампутированный глаз
-        BodyPart eyePart = findAmputatedEye(data);
+        BodyPart eyePart = EyeImplantHandler.findAbsentEye(data);
         if (eyePart == null) {
-            sp.displayClientMessage(Component.literal("No amputated eye to implant."), true);
-            return InteractionResultHolder.fail(player.getItemInHand(hand));
+            sp.displayClientMessage(Component.translatable("doomedbgfix.eye.implant.no_empty_socket"), true);
+            return InteractionResultHolder.fail(stack);
         }
 
-        // Устанавливаем имплант
-        LimbData limb = data.getLimb(eyePart);
-        limb.setDismembered(false);
-        limb.setSkinHealth(50f);  // Частично восстановлен
-        limb.setMuscleHealth(50f);
-        limb.setBleed(0f);
-        limb.setPain(20f);
-
-        // Помечаем, что это имплант (для смены спрайта)
-        limb.getOrCreateTag().putBoolean("EyeImplant", true);
-
-        DoomedDataUtil.sync(sp);
-        player.getItemInHand(hand).shrink(1);
-        sp.displayClientMessage(Component.literal("Eye implant installed successfully."), true);
-
-        return InteractionResultHolder.success(player.getItemInHand(hand));
-    }
-
-    private BodyPart findAmputatedEye(DoomedData data) {
-        for (BodyPart part : new BodyPart[]{BodyPart.EYE_LEFT, BodyPart.EYE_RIGHT}) {
-            LimbData limb = data.getLimb(part);
-            if (limb != null && limb.isDismembered()) return part;
+        if (!EyeImplantHandler.install(sp, eyePart)) {
+            return InteractionResultHolder.fail(stack);
         }
-        return null;
+
+        if (!sp.getAbilities().instabuild) stack.shrink(1);
+        sp.displayClientMessage(Component.translatable("doomedbgfix.eye.implant.installed"), true);
+        return InteractionResultHolder.success(stack);
     }
 }

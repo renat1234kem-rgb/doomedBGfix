@@ -15,24 +15,25 @@ import ru.renat.doomedbgfix.bag.EmptyBagRefill;
 import ru.renat.doomedbgfix.config.BGConfig;
 import ru.renat.doomedbgfix.cut.CutCapability;
 import ru.renat.doomedbgfix.net.BGNetwork;
+import ru.renat.doomedbgfix.registry.EyeItems;
 import ru.renat.doomedbgfix.server.CutTicker;
 
 @Mod(DoomedBGFix.MODID)
 public final class DoomedBGFix {
     public static final String MODID = "doomedbgfix";
-    public static final String VERSION = "0.3.2";
+    public static final String VERSION = "0.3.3";
     public static final Logger LOGGER = LogManager.getLogger("doomedbgfix");
 
     public DoomedBGFix() {
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, BGConfig.SPEC, "doomedbgfix-common.toml");
         CutCapability.register(modBus);
+        EyeItems.register(modBus);
         BGNetwork.register();
         MinecraftForge.EVENT_BUS.register(new CutTicker());
         MinecraftForge.EVENT_BUS.register(new BarrelFill());
         MinecraftForge.EVENT_BUS.register(new BagTooltip());
         MinecraftForge.EVENT_BUS.register(new EmptyBagRefill());
         LOGGER.info("[doomedbgfix] v{} armed: cut rework, bags, stump aftercare, bandages", VERSION);
-        ru.renat.doomedbgfix.registry.EyeItems.register(modBus);    
     }
 }

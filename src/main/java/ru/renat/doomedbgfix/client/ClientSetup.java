@@ -3,7 +3,9 @@ package ru.renat.doomedbgfix.client;
 import net.mattlives.doomedmatu.registry.DoomedItems;
 import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
@@ -25,5 +27,10 @@ public final class ClientSetup {
             ItemProperties.register(DoomedItems.SALINE.get(), BAG_USED,
                     (stack, level, entity, seed) -> 1f - BagVolume.get(stack) / 100f);
         });
+    }
+
+    @SubscribeEvent
+    public static void onRegisterReloadListeners(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener((ResourceManagerReloadListener) rm -> CyberEyeSprites.clear());
     }
 }

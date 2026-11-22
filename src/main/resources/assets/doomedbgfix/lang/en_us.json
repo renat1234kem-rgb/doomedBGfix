@@ -18,5 +18,8 @@
   "item.doomedbgfix.eye_implant": "Eye Implant",
   "item.doomedbgfix.empty_eye_implant": "Empty Eye Implant",
   "doomedbgfix.eye.amputation.title": "Eye Amputation",
-  "doomedbgfix.eye.amputation.hint": "Carefully cut the conjunctiva and sever the optic nerve"
+  "doomedbgfix.eye.amputation.hint": "Carefully cut the conjunctiva and sever the optic nerve",
+  "doomedbgfix.eye.implant.not_doomed": "You need to be Doomed to use this.",
+  "doomedbgfix.eye.implant.no_empty_socket": "There is no empty eye socket to fit an implant into.",
+  "doomedbgfix.eye.implant.installed": "Eye implant installed."
 }

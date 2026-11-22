@@ -7,7 +7,7 @@ modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
 description='''
-Add-on for Doomed (doomedmatu). Adds extra flaws to the trait selection screen.
+Add-on for Doomed (doomedmatu): reworked amputation minigame, infusion bags, stump aftercare, progressive bandages and cybernetic eye implants.
 '''
 
 [[dependencies.${mod_id}]]
@@ -28,12 +28,5 @@ Add-on for Doomed (doomedmatu). Adds extra flaws to the trait selection screen.
     modId="doomedmatu"
     mandatory=true
     versionRange="[0.4.7,0.5)"
-    ordering="AFTER"
-    side="BOTH"
-
-[[dependencies.doomedbgfix]]
-    modId="doomedmatu"
-    mandatory=true
-    versionRange="[0.4.7,)"
     ordering="AFTER"
     side="BOTH"
