@@ -1,14 +1,17 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    " G ",
-    "IPI",
-    " G "
+    "gdg",
+    "cSc",
+    "rer"
   ],
   "key": {
-    "G": { "item": "minecraft:glass_pane" },
-    "I": { "item": "minecraft:iron_nugget" },
-    "P": { "item": "doomedbgfix:empty_eye_implant" }
+    "g": { "item": "minecraft:gold_ingot" },
+    "d": { "item": "minecraft:diamond" },
+    "c": { "item": "doomedmatu:overclock_chip" },
+    "S": { "item": "doomedbgfix:empty_eye_implant" },
+    "r": { "item": "minecraft:redstone_block" },
+    "e": { "item": "minecraft:ender_eye" }
   },
   "result": {
     "item": "doomedbgfix:eye_implant",

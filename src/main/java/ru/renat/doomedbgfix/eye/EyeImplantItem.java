@@ -11,7 +11,12 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import ru.renat.doomedbgfix.server.EyeCutSessions;
 
+/**
+ * Готовый имплант. ПКМ в воздух - мини-игра установки себе в пустую глазницу.
+ * Установка другому игроку идёт через правый клик по нему (см. CoopMedicalEyeMixin).
+ */
 public class EyeImplantItem extends Item {
 
     public EyeImplantItem(Properties properties) {
@@ -22,7 +27,7 @@ public class EyeImplantItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (level.isClientSide) return InteractionResultHolder.success(stack);
-        if (!(player instanceof ServerPlayer sp)) return InteractionResultHolder.fail(stack);
+        if (hand != InteractionHand.MAIN_HAND || !(player instanceof ServerPlayer sp)) return InteractionResultHolder.fail(stack);
 
         DoomedData data = DoomedDataUtil.get(sp).orElse(null);
         if (data == null || !data.isActive()) {
@@ -36,12 +41,9 @@ public class EyeImplantItem extends Item {
             return InteractionResultHolder.fail(stack);
         }
 
-        if (!EyeImplantHandler.install(sp, eyePart)) {
+        if (!EyeCutSessions.openSelf(sp, eyePart, EyeCutModel.MODE_INSTALL, false)) {
             return InteractionResultHolder.fail(stack);
         }
-
-        if (!sp.getAbilities().instabuild) stack.shrink(1);
-        sp.displayClientMessage(Component.translatable("doomedbgfix.eye.implant.installed"), true);
         return InteractionResultHolder.success(stack);
     }
 }

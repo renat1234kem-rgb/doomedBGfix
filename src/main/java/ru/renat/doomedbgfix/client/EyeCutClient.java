@@ -17,11 +17,11 @@ public final class EyeCutClient {
         EyeCutScreen screen = new EyeCutScreen(packet);
         current = screen;
         Screen open = mc.screen;
-        if (open instanceof StatusPanelScreen panel) {
+        if (packet.patientId() == -1 && open instanceof StatusPanelScreen panel) {
             panel.openAuthorizedTreatment(screen, packet.forceInteractive());
             return;
         }
-        if (open instanceof SeveredExaminationScreen exam) {
+        if (packet.patientId() == -1 && open instanceof SeveredExaminationScreen exam) {
             exam.openAuthorizedTreatment(screen, packet.forceInteractive());
             return;
         }

@@ -28,5 +28,16 @@
   "doomedbgfix.eye.cut.stage.2": "Перерезать зрительный нерв",
   "doomedbgfix.eye.cut.hint.0": "Зажмите ЛКМ и ведите скальпелем по ободку глаза",
   "doomedbgfix.eye.cut.hint.1": "Водите скальпелем поперёк каждой мышцы туда-сюда",
-  "doomedbgfix.eye.cut.hint.2": "Режьте поперёк зрительного нерва внизу"
+  "doomedbgfix.eye.cut.hint.2": "Режьте поперёк зрительного нерва внизу",
+  "doomedbgfix.eye.install.title": "Установка глазного импланта",
+  "doomedbgfix.eye.install.stage.0": "Подключите зрительный нерв",
+  "doomedbgfix.eye.install.stage.1": "Закрепите глазные мышцы",
+  "doomedbgfix.eye.install.stage.2": "Зашейте края глазницы",
+  "doomedbgfix.eye.install.hint.0": "Зажмите и водите пинцетом поперёк нерва",
+  "doomedbgfix.eye.install.hint.1": "Зажмите и водите поперёк каждой мышцы, чтобы закрепить её",
+  "doomedbgfix.eye.install.hint.2": "Зажмите и ведите по кольцу, чтобы зашить его",
+  "doomedbgfix.eye.implant.no_empty_socket_other": "У пациента нет пустой глазницы.",
+  "doomedbgfix.eye.cut.coop_disabled": "Этот сервер не разрешает оперировать других игроков.",
+  "doomedbgfix.eye.cut.two_hands": "Для этого нужны две рабочие руки.",
+  "doomedbgfix.eye.cut.cannot_answer": "Глаз ещё можно спасти, а пациент не может ответить."
 }

@@ -2,6 +2,7 @@ package ru.renat.doomedbgfix.mixin;
 
 import net.mattlives.doomedmatu.body.BodyPart;
 import net.mattlives.doomedmatu.body.DismemberService;
+import net.mattlives.doomedmatu.body.EyeFunctionService;
 import net.mattlives.doomedmatu.capability.DoomedData;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -10,6 +11,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import ru.renat.doomedbgfix.config.BGConfig;
+import ru.renat.doomedbgfix.eye.EyeCutModel;
+import ru.renat.doomedbgfix.server.EyeCutSessions;
 import ru.renat.doomedbgfix.server.CutSessions;
 import ru.renat.doomedbgfix.server.TourniquetFix;
 
@@ -33,6 +36,11 @@ public abstract class DismemberServiceMixin {
     private static void bg$openCoop(ServerPlayer healer, ServerPlayer patient, BodyPart part,
                                     DismemberService.CutTool authorizedTool, boolean implied,
                                     CallbackInfoReturnable<Boolean> cir) {
+        // Глаза не входят в DISTAL, но согласие на их удаление Doomed тоже завершает через этот метод.
+        if (EyeFunctionService.isEye(part)) {
+            cir.setReturnValue(EyeCutSessions.openCoop(healer, patient, part, EyeCutModel.MODE_CUT, false));
+            return;
+        }
         if (!BGConfig.enableRework()) return;
         cir.setReturnValue(CutSessions.openCoop(healer, patient, part, authorizedTool, false));
     }

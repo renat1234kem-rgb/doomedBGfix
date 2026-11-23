@@ -1,0 +1,1435 @@
+diff --git a/src/main/java/ru/renat/doomedbgfix/client/EyeCutClient.java b/src/main/java/ru/renat/doomedbgfix/client/EyeCutClient.java
+index 3eaba23..d6132e2 100644
+--- a/src/main/java/ru/renat/doomedbgfix/client/EyeCutClient.java
++++ b/src/main/java/ru/renat/doomedbgfix/client/EyeCutClient.java
+@@ -17,11 +17,11 @@ public final class EyeCutClient {
+         EyeCutScreen screen = new EyeCutScreen(packet);
+         current = screen;
+         Screen open = mc.screen;
+-        if (open instanceof StatusPanelScreen panel) {
++        if (packet.patientId() == -1 && open instanceof StatusPanelScreen panel) {
+             panel.openAuthorizedTreatment(screen, packet.forceInteractive());
+             return;
+         }
+-        if (open instanceof SeveredExaminationScreen exam) {
++        if (packet.patientId() == -1 && open instanceof SeveredExaminationScreen exam) {
+             exam.openAuthorizedTreatment(screen, packet.forceInteractive());
+             return;
+         }
+diff --git a/src/main/java/ru/renat/doomedbgfix/client/EyeCutScreen.java b/src/main/java/ru/renat/doomedbgfix/client/EyeCutScreen.java
+index e5c490d..7945062 100644
+--- a/src/main/java/ru/renat/doomedbgfix/client/EyeCutScreen.java
++++ b/src/main/java/ru/renat/doomedbgfix/client/EyeCutScreen.java
+@@ -1,6 +1,7 @@
+ package ru.renat.doomedbgfix.client;
+ 
+ import net.mattlives.doomedmatu.body.BodyPart;
++import net.mattlives.doomedmatu.body.PatientSnapshot;
+ import net.mattlives.doomedmatu.client.ClientSfx;
+ import net.mattlives.doomedmatu.client.screen.DoomedScreen;
+ import net.mattlives.doomedmatu.client.screen.HealthPanelBackdrop;
+@@ -22,10 +23,9 @@ import ru.renat.doomedbgfix.net.S2COpenEyeCutPacket;
+ import java.util.Locale;
+ 
+ /**
+- * Удаление глаза скальпелем, три этапа:
+- *  1) обвести ободок глаза (конъюнктива, 8 дуг);
+- *  2) перепилить четыре мышцы, водя скальпелем поперёк каждой;
+- *  3) перерезать зрительный нерв.
++ * Мини-игры с глазом (на себе и на другом игроке), три этапа в каждой.
++ *  Удаление (скальпель): ободок -> четыре мышцы -> зрительный нерв.
++ *  Установка (пинцет):   нерв  -> четыре мышцы  -> ободок (швы).
+  * Прогресс, боль и кровь считает сервер, здесь только ввод и отрисовка.
+  */
+ public final class EyeCutScreen extends DoomedScreen {
+@@ -56,8 +56,12 @@ public final class EyeCutScreen extends DoomedScreen {
+     private static final int SCALPEL_H = 34;
+ 
+     private final BodyPart part;
++    private final int patientId;
++    private final int mode;
+     private final long token;
+     private LimbView view;
++    private final PatientSnapshot snapshot;
++    private final long snapshotAtMs;
+ 
+     private final float[] server = new float[EyeCutModel.SEGMENTS];
+     private final float[] shown = new float[EyeCutModel.SEGMENTS];
+@@ -66,29 +70,48 @@ public final class EyeCutScreen extends DoomedScreen {
+ 
+     private boolean holding;
+     private boolean stopped;
+-    private boolean severed;
++    private boolean finished;
+     private float lastX;
+     private float lastY;
+     private long lastSendMs;
+     private long lastSoundMs;
+ 
+     public EyeCutScreen(S2COpenEyeCutPacket packet) {
+-        super(Component.translatable("doomedbgfix.eye.cut.title"));
++        super(Component.translatable(titleKey(EyeCutModel.normMode(packet.mode()))));
+         this.part = BodyPart.values()[Mth.clamp(packet.part(), 0, BodyPart.values().length - 1)];
++        this.patientId = packet.patientId();
++        this.mode = EyeCutModel.normMode(packet.mode());
+         this.token = packet.token();
+         this.view = packet.view();
++        this.snapshot = packet.snapshot();
++        this.snapshotAtMs = System.currentTimeMillis();
+         System.arraycopy(packet.progress(), 0, server, 0, EyeCutModel.SEGMENTS);
+         System.arraycopy(packet.progress(), 0, shown, 0, EyeCutModel.SEGMENTS);
+-        this.stage = Math.min(EyeCutModel.currentStage(server), EyeCutModel.STAGES - 1);
++        this.stage = Math.min(EyeCutModel.currentStage(server, mode), EyeCutModel.STAGES - 1);
+     }
+ 
+     @Override protected int virtualW() { return 1280; }
+     @Override protected int virtualH() { return 720; }
+-    @Override protected PainHand.HandPose handPose() { return PainHand.HandPose.GRASP; }
++    @Override protected PainHand.HandPose handPose() {
++        return mode == EyeCutModel.MODE_INSTALL ? PainHand.HandPose.TWEEZERS : PainHand.HandPose.GRASP;
++    }
++
++    private static String titleKey(int mode) {
++        return mode == EyeCutModel.MODE_INSTALL ? "doomedbgfix.eye.install.title" : "doomedbgfix.eye.cut.title";
++    }
++
++    private String keyPrefix() {
++        return mode == EyeCutModel.MODE_INSTALL ? "doomedbgfix.eye.install." : "doomedbgfix.eye.cut.";
++    }
++
++    /** Насколько ткань "цела": при удалении убывает с прогрессом, при установке растёт (прикрепляется). */
++    private float intact(float progress) {
++        return mode == EyeCutModel.MODE_INSTALL ? progress : 1f - progress;
++    }
+ 
+     @Override
+     protected float[] handDrawPos(float vmx, float vmy) {
+-        if (!holding) return null;
++        if (!holding || mode == EyeCutModel.MODE_INSTALL) return null;
+         // Скальпель торчит влево от курсора, рука держит рукоять справа.
+         return new float[]{vmx + SCALPEL_W - 30f, vmy + 8f};
+     }
+@@ -97,7 +120,7 @@ public final class EyeCutScreen extends DoomedScreen {
+ 
+     @Override
+     protected boolean doMouseClicked(double hx, double hy, int button) {
+-        if (button != 0 || stopped || severed) return false;
++        if (button != 0 || stopped || finished) return false;
+         holding = true;
+         lastX = (float) hx;
+         lastY = (float) hy;
+@@ -120,7 +143,7 @@ public final class EyeCutScreen extends DoomedScreen {
+     }
+ 
+     private void sample(float hx, float hy) {
+-        if (!holding || stopped || severed) return;
++        if (!holding || stopped || finished) return;
+         float prevX = lastX;
+         float prevY = lastY;
+         lastX = hx;
+@@ -129,8 +152,8 @@ public final class EyeCutScreen extends DoomedScreen {
+         float dy = hy - prevY;
+         if (dx * dx + dy * dy < 0.25f) return;
+ 
+-        switch (stage) {
+-            case EyeCutModel.STAGE_RIM -> {
++        switch (EyeCutModel.groupAt(mode, stage)) {
++            case EyeCutModel.GROUP_RIM -> {
+                 float r = (float) Math.hypot(hx - CX, hy - CY);
+                 if (Math.abs(r - R) > RING_BAND) return;
+                 float a1 = (float) Math.atan2(prevY - CY, prevX - CX);
+@@ -140,7 +163,7 @@ public final class EyeCutScreen extends DoomedScreen {
+                 while (da < -Math.PI) da += (float) (Math.PI * 2.0);
+                 add(rimIndex(a2), Math.abs(da) * R / RIM_SEG_PX);
+             }
+-            case EyeCutModel.STAGE_MUSCLE -> {
++            case EyeCutModel.GROUP_MUSCLE -> {
+                 for (int i = 0; i < EyeCutModel.MUSCLES; i++) {
+                     if (inBar(MUSCLE_DEG[i], hx, hy)) {
+                         add(EyeCutModel.RIM + i, Math.abs(perp(MUSCLE_DEG[i], dx, dy)) / MUSCLE_SWEEP_PX);
+@@ -165,7 +188,7 @@ public final class EyeCutScreen extends DoomedScreen {
+     private void flush() {
+         long now = System.currentTimeMillis();
+         for (int i = 0; i < EyeCutModel.SEGMENTS; i++) {
+-            if (pending[i] > 0.002f && !stopped && !severed) {
++            if (pending[i] > 0.002f && !stopped && !finished) {
+                 BGNetwork.sendEyeWork(new C2SEyeCutWorkPacket(token, part.ordinal(), i, pending[i]));
+             }
+             pending[i] = 0f;
+@@ -198,16 +221,20 @@ public final class EyeCutScreen extends DoomedScreen {
+     public void accept(S2CEyeCutStatePacket state) {
+         if (state.token() != token) return;
+ 
+-        float before = EyeCutModel.total(server);
++        float before = EyeCutModel.total(server, mode);
+         System.arraycopy(state.progress(), 0, server, 0, EyeCutModel.SEGMENTS);
+         if (state.view() != null) view = state.view();
+ 
+-        if (state.severed()) {
+-            severed = true;
++        if (state.done()) {
++            finished = true;
+             holding = false;
+             java.util.Arrays.fill(shown, 1f);
+             flashSuccess();
+-            ClientSfx.play(DoomedSounds.GORE.get(), 0.9f, 0.5f);
++            if (mode == EyeCutModel.MODE_INSTALL) {
++                ClientSfx.play(DoomedSounds.BEEP1.get(), 0.6f, 1.3f);
++            } else {
++                ClientSfx.play(DoomedSounds.GORE.get(), 0.9f, 0.5f);
++            }
+             closeNow();
+             return;
+         }
+@@ -218,12 +245,17 @@ public final class EyeCutScreen extends DoomedScreen {
+             return;
+         }
+ 
+-        float after = EyeCutModel.total(server);
++        float after = EyeCutModel.total(server, mode);
+         long now = System.currentTimeMillis();
+         if (after > before + 1.0E-4f && now - lastSoundMs >= 220L) {
+             lastSoundMs = now;
+-            ClientSfx.play(DoomedSounds.CUTEYE.get(), 0.7f, 0.4f);
+-            winceFlash(Math.min(0.55f, 0.15f + after * 0.4f));
++            if (mode == EyeCutModel.MODE_INSTALL) {
++                ClientSfx.play(DoomedSounds.BEEP1.get(), 0.25f, 0.8f + after * 0.5f);
++            } else {
++                ClientSfx.play(DoomedSounds.CUTEYE.get(), 0.7f, 0.4f);
++                // Вспышка боли только у того, кому режут глаз (оператор на другом игроке боли не чувствует).
++                if (patientId == -1) winceFlash(Math.min(0.55f, 0.15f + after * 0.4f));
++            }
+         }
+     }
+ 
+@@ -238,7 +270,7 @@ public final class EyeCutScreen extends DoomedScreen {
+ 
+     @Override
+     public void onClose() {
+-        if (!severed && token != 0L) BGNetwork.sendStop(new C2SCutStopPacket(token));
++        if (!finished && token != 0L) BGNetwork.sendStop(new C2SCutStopPacket(token));
+         EyeCutClient.clear(this);
+         super.onClose();
+     }
+@@ -253,14 +285,18 @@ public final class EyeCutScreen extends DoomedScreen {
+             if (Math.abs(server[i] - shown[i]) < 0.002f) shown[i] = server[i];
+         }
+ 
+-        HealthPanelBackdrop.render(gg, this.font);
++        if (patientId == -1 || snapshot == null) {
++            HealthPanelBackdrop.render(gg, this.font);
++        } else {
++            HealthPanelBackdrop.render(gg, this.font, snapshot, patientId, snapshotAtMs);
++        }
+ 
+-        gg.drawCenteredString(this.font, Component.translatable("doomedbgfix.eye.cut.title").getString()
++        gg.drawCenteredString(this.font, Component.translatable(titleKey(mode)).getString()
+                 + " - " + part.displayName(), (int) CX, 72, 0xFFFFFF);
+ 
+         drawNerve(gg);
+         drawMuscles(gg);
+-        drawEyeball(gg);
++        if (mode == EyeCutModel.MODE_INSTALL) drawImplant(gg); else drawEyeball(gg);
+         drawRim(gg);
+         drawBlood(gg, hx, hy);
+         drawScalpel(gg, hx, hy);
+@@ -268,20 +304,20 @@ public final class EyeCutScreen extends DoomedScreen {
+     }
+ 
+     private void drawNerve(GuiGraphics gg) {
+-        float p = shown[EyeCutModel.RIM + EyeCutModel.MUSCLES];
+-        boolean active = stage == EyeCutModel.STAGE_NERVE;
+-        int color = p >= 1f ? 0xFF4A1A1A : lerp(active ? 0xFFEDE3A8 : 0xFF9C9678, 0xFF5A1010, p);
+-        float far = p >= 1f ? BAR_NEAR + 14f : BAR_FAR;
++        float k = intact(shown[EyeCutModel.RIM + EyeCutModel.MUSCLES]);
++        boolean active = stageIsGroup(EyeCutModel.GROUP_NERVE);
++        int color = lerp(0xFF4A1A1A, active ? 0xFFEDE3A8 : 0xFF9C9678, k);
++        float far = BAR_NEAR + 14f + (BAR_FAR - BAR_NEAR - 14f) * k;
+         drawBar(gg, NERVE_DEG, R * 0.55f, far, 17f, color);
+     }
+ 
+     private void drawMuscles(GuiGraphics gg) {
+         for (int i = 0; i < EyeCutModel.MUSCLES; i++) {
+-            float p = shown[EyeCutModel.RIM + i];
+-            boolean active = stage == EyeCutModel.STAGE_MUSCLE;
++            float k = intact(shown[EyeCutModel.RIM + i]);
++            boolean active = stageIsGroup(EyeCutModel.GROUP_MUSCLE);
+             int base = active ? 0xFFB84646 : 0xFF8A4A4A;
+-            int color = lerp(base, 0xFF3A0808, p);
+-            float far = p >= 1f ? BAR_NEAR + 16f : BAR_FAR;
++            int color = lerp(0xFF3A0808, base, k);
++            float far = BAR_NEAR + 16f + (BAR_FAR - BAR_NEAR - 16f) * k;
+             drawBar(gg, MUSCLE_DEG[i], R * 0.55f, far, BAR_HALF, color);
+         }
+     }
+@@ -312,6 +348,23 @@ public final class EyeCutScreen extends DoomedScreen {
+         gg.fill((int) CX - 22, (int) CY - 30, (int) CX - 12, (int) CY - 22, 0xCCFFFFFF);
+     }
+ 
++    /** Кибернетический глаз: стальной корпус, линза наливается светом по мере установки. */
++    private void drawImplant(GuiGraphics gg) {
++        float glow = EyeCutModel.total(shown, mode);
++        fillCircle(gg, R, 0xFF70757D);
++        fillCircle(gg, R - 9f, 0xFF9AA0A8);
++        fillCircle(gg, R - 24f, 0xFF50555C);
++        fillCircle(gg, 70f, 0xFF23282D);
++        fillCircle(gg, 62f, lerp(0xFF1B4F49, 0xFF2E9A8E, glow));
++        fillCircle(gg, 40f, lerp(0xFF123631, 0xFF58D8C6, glow));
++        fillCircle(gg, 20f, 0xFF081210);
++        gg.fill((int) CX - 24, (int) CY - 32, (int) CX - 12, (int) CY - 24, 0xCCFFFFFF);
++    }
++
++    private boolean stageIsGroup(int group) {
++        return stage < EyeCutModel.STAGES && EyeCutModel.groupAt(mode, stage) == group;
++    }
++
+     private void fillCircle(GuiGraphics gg, float radius, int color) {
+         for (int y = (int) (CY - radius); y < CY + radius; y++) {
+             float off = (y + 0.5f - CY) / radius;
+@@ -323,23 +376,33 @@ public final class EyeCutScreen extends DoomedScreen {
+ 
+     private void drawRim(GuiGraphics gg) {
+         float segRad = (float) (Math.PI * 2.0 / EyeCutModel.RIM);
+-        boolean active = stage == EyeCutModel.STAGE_RIM;
+-        for (float deg = 0f; deg < 360f; deg += 1.2f) {
++        boolean active = stageIsGroup(EyeCutModel.GROUP_RIM);
++        boolean install = mode == EyeCutModel.MODE_INSTALL;
++        int step = 0;
++        for (float deg = 0f; deg < 360f; deg += 1.2f, step++) {
+             float t = (float) Math.toRadians(deg);
+             int idx = Math.min(EyeCutModel.RIM - 1, (int) (t / segRad));
+             float f = (t - idx * segRad) / segRad;
+-            boolean cut = f <= shown[idx];
+-            int color = cut ? 0xFF4A0B0B : (active ? 0xFFD08080 : 0xFFB48A8A);
++            boolean done = f <= shown[idx];
++            int color;
++            if (install) {
++                color = done ? 0xFFD8B0A0 : (active ? 0xFF8A1A1A : 0xFF5A1414);
++            } else {
++                color = done ? 0xFF4A0B0B : (active ? 0xFFD08080 : 0xFFB48A8A);
++            }
+             float ang = t - (float) (Math.PI / 2.0);
+             int x = Math.round(CX + (float) Math.cos(ang) * R);
+             int y = Math.round(CY + (float) Math.sin(ang) * R);
+             gg.fill(x - 3, y - 3, x + 3, y + 3, color);
++            if (install && done && step % 6 == 0) {
++                gg.fill(x - 1, y - 6, x + 1, y + 6, 0xFF2A1A1A);
++            }
+         }
+     }
+ 
+     private void drawBlood(GuiGraphics gg, float hx, float hy) {
+         float bleed = view == null ? 0f : view.bleed();
+-        float total = EyeCutModel.total(shown);
++        float total = EyeCutModel.total(shown, mode);
+         if (total < 0.02f || bleed < 0.2f) return;
+         int drops = Math.min(16, 1 + (int) (bleed / 6f));
+         long t = System.currentTimeMillis() / 90L;
+@@ -354,15 +417,15 @@ public final class EyeCutScreen extends DoomedScreen {
+     }
+ 
+     private void drawScalpel(GuiGraphics gg, float hx, float hy) {
+-        if (!holding) return;
++        if (!holding || mode == EyeCutModel.MODE_INSTALL) return;
+         gg.blit(SCALPEL, Math.round(hx), Math.round(hy) - SCALPEL_H / 2 + 4, SCALPEL_W, SCALPEL_H,
+                 0f, 0f, SCALPEL_TEX_W, SCALPEL_TEX_H, SCALPEL_TEX_W, SCALPEL_TEX_H);
+     }
+ 
+     private void drawHud(GuiGraphics gg) {
+         int y = (int) (CY + R + 168);
+-        String stageName = Component.translatable("doomedbgfix.eye.cut.stage." + stage).getString();
+-        gg.drawCenteredString(this.font, stageName + "   " + Math.round(EyeCutModel.total(shown) * 100f) + "%",
++        String stageName = Component.translatable(keyPrefix() + "stage." + stage).getString();
++        gg.drawCenteredString(this.font, stageName + "   " + Math.round(EyeCutModel.total(shown, mode) * 100f) + "%",
+                 (int) CX, y, 0xFFE8E0D0);
+ 
+         if (view != null) {
+@@ -373,7 +436,7 @@ public final class EyeCutScreen extends DoomedScreen {
+ 
+         String hint = stopped
+                 ? Component.translatable("doomedbgfix.cut.hint.paused").getString()
+-                : Component.translatable("doomedbgfix.eye.cut.hint." + stage).getString();
++                : Component.translatable(keyPrefix() + "hint." + stage).getString();
+         gg.drawCenteredString(this.font, hint, (int) CX, 636, 0xFFFFE0A0);
+         gg.drawCenteredString(this.font, Component.translatable("doomedbgfix.cut.hint.esc").getString(),
+                 (int) CX, 652, 0xFFB0B0B0);
+diff --git a/src/main/java/ru/renat/doomedbgfix/eye/EyeAmputationHandler.java b/src/main/java/ru/renat/doomedbgfix/eye/EyeAmputationHandler.java
+index e9d5ef0..7b438ab 100644
+--- a/src/main/java/ru/renat/doomedbgfix/eye/EyeAmputationHandler.java
++++ b/src/main/java/ru/renat/doomedbgfix/eye/EyeAmputationHandler.java
+@@ -2,6 +2,7 @@ package ru.renat.doomedbgfix.eye;
+ 
+ import net.mattlives.doomedmatu.body.BodyPart;
+ import net.mattlives.doomedmatu.body.EyeFunctionService;
++import net.mattlives.doomedmatu.body.LimbData;
+ import net.mattlives.doomedmatu.capability.DoomedData;
+ import net.mattlives.doomedmatu.capability.DoomedDataUtil;
+ import net.minecraft.server.level.ServerPlayer;
+@@ -9,42 +10,58 @@ import net.minecraft.world.item.ItemStack;
+ import ru.renat.doomedbgfix.registry.EyeItems;
+ 
+ /**
+- * Финальный шаг удаления глаза (вызывается, когда мини-игра дошла до конца).
++ * Финальный шаг удаления глаза (мини-игра дошла до конца).
+  *
+- * DoomedData.removeEye(BodyPart) уже делает limb.reset(), dismembered=true,
+- * боль головы 100, кровь головы +20 и травму 35. Сверху добавляем шок и травму,
+- * чтобы это было заметно больнее обычной ампутации конечности.
++ * Почему кровь переносится на голову вручную. makeAbsent() делает limb.reset() - накопленное
++ * кровотечение самого глаза пропадает. BleedHandler при этом каждый тик обрезает кровь лимба до
++ * maxBleedForSkin() = 100 * (1 - skin/100), поэтому на целой коже головы любое кровотечение мгновенно
++ * "схлопывается" в 0. Так же поступает Doomed при потере глаза от отчаяния: сначала портит кожу головы,
++ * потом добавляет кровь. Делаем то же самое и переносим кровь глаза.
+  */
+ public final class EyeAmputationHandler {
+ 
++    private static final float SOCKET_BLEED = 25f;
++    private static final float HEAD_MUSCLE_LOSS = 12f;
+     private static final float EXTRA_TRAUMA = 15f;
+     private static final float MIN_SHOCK = 45f;
+     private static final float MIN_ADRENALINE = 60f;
+ 
+     private EyeAmputationHandler() {}
+ 
+-    public static boolean perform(ServerPlayer player, BodyPart eyePart) {
++    /**
++     * @param patient   у кого вырезают глаз
++     * @param recipient кому отдать вырезанный кибер-глаз (оператор), null - самому пациенту
++     */
++    public static boolean perform(ServerPlayer patient, BodyPart eyePart, ServerPlayer recipient) {
+         if (!EyeFunctionService.isEye(eyePart)) return false;
+ 
+-        DoomedData data = DoomedDataUtil.get(player).orElse(null);
++        DoomedData data = DoomedDataUtil.get(patient).orElse(null);
+         if (data == null || !data.isActive()) return false;
++        if (EyeFunctionService.isAbsent(data, eyePart)) return false;
+ 
+         boolean hadImplant = EyeImplantHandler.isImplanted(data, eyePart);
++        float transferred = Math.min(LimbData.MAX_BLEED, data.getLimb(eyePart).getBleed() + SOCKET_BLEED);
+ 
+-        // false, если глаза уже нет.
++        LimbData head = data.getLimb(BodyPart.HEAD);
++        head.setSkinHealth(Math.min(head.getSkinHealth(), 100f - transferred));
++        head.setMuscleHealth(head.getMuscleHealth() - HEAD_MUSCLE_LOSS);
++
++        // removeEye: limb.reset() + dismembered, боль головы 100, кровь головы +20, травма 35.
+         if (!data.removeEye(eyePart)) return false;
+ 
++        head.setBleed(head.getBleed() + transferred);
+         data.addTrauma(EXTRA_TRAUMA);
+         data.setShock(Math.max(data.getShock(), MIN_SHOCK));
+         data.setAdrenaline(Math.max(data.getAdrenaline(), MIN_ADRENALINE));
+ 
+-        // Вырезали кибер-глаз: имплант возвращается игроку (removeEye его в данных обнулил).
++        // Вырезали кибер-глаз: имплант возвращается (removeEye метку в данных обнулил).
+         if (hadImplant) {
+             ItemStack implant = new ItemStack(EyeItems.EYE_IMPLANT.get());
+-            if (!player.getInventory().add(implant)) player.drop(implant, false);
++            ServerPlayer to = recipient != null ? recipient : patient;
++            if (!to.getInventory().add(implant)) to.drop(implant, false);
+         }
+ 
+-        DoomedDataUtil.sync(player);
++        DoomedDataUtil.sync(patient);
+         return true;
+     }
+ }
+diff --git a/src/main/java/ru/renat/doomedbgfix/eye/EyeCutModel.java b/src/main/java/ru/renat/doomedbgfix/eye/EyeCutModel.java
+index c072d88..8de00a3 100644
+--- a/src/main/java/ru/renat/doomedbgfix/eye/EyeCutModel.java
++++ b/src/main/java/ru/renat/doomedbgfix/eye/EyeCutModel.java
+@@ -1,66 +1,133 @@
+ package ru.renat.doomedbgfix.eye;
+ 
++import java.util.Arrays;
++
+ /**
+- * Общая для клиента и сервера модель мини-игры удаления глаза. Без классов Minecraft.
++ * Общая для клиента и сервера модель мини-игры глаза (удаление и установка). Без классов Minecraft.
+  *
+  * 13 сегментов, у каждого прогресс 0..1:
+- *   0..7   - конъюнктива: 8 дуг по ободку глаза (идти по кругу);
+- *   8..11  - четыре глазодвигательные мышцы (пилить поперёк);
+- *   12     - зрительный нерв (последний рез).
+- * Этапы идут строго по порядку: пока не закончен текущий, следующий недоступен.
++ *   0..7   - ободок глаза (конъюнктива): 8 дуг, их нужно пройти по кругу;
++ *   8..11  - четыре глазодвигательные мышцы (водить поперёк);
++ *   12     - зрительный нерв.
++ *
++ * Порядок этапов зависит от режима:
++ *   MODE_CUT     - ободок, мышцы, нерв (вырезаем снаружи внутрь);
++ *   MODE_INSTALL - нерв, мышцы, ободок (устанавливаем изнутри наружу).
++ * Этап недоступен, пока не закончен предыдущий.
+  */
+ public final class EyeCutModel {
+     private EyeCutModel() {}
+ 
+-    public static final int STAGE_RIM = 0;
+-    public static final int STAGE_MUSCLE = 1;
+-    public static final int STAGE_NERVE = 2;
+-    public static final int STAGES = 3;
++    public static final int MODE_CUT = 0;
++    public static final int MODE_INSTALL = 1;
+ 
++    public static final int GROUP_RIM = 0;
++    public static final int GROUP_MUSCLE = 1;
++    public static final int GROUP_NERVE = 2;
++
++    public static final int STAGES = 3;
+     public static final int RIM = 8;
+     public static final int MUSCLES = 4;
+     public static final int SEGMENTS = RIM + MUSCLES + 1;
+ 
+-    private static final int[] FIRST = {0, RIM, RIM + MUSCLES};
+-    private static final int[] COUNT = {RIM, MUSCLES, 1};
++    /** Сколько единиц здоровья мышц глаза съедает полностью выполненная операция (мышцы не падают ниже 10). */
++    public static final float MUSCLE_DAMAGE_K = 90f;
+ 
+-    /** Доля каждого этапа в общем проценте. Сумма = 1. */
++    private static final int[] GROUP_FIRST = {0, RIM, RIM + MUSCLES};
++    private static final int[] GROUP_COUNT = {RIM, MUSCLES, 1};
++    private static final int[][] ORDER = {
++            {GROUP_RIM, GROUP_MUSCLE, GROUP_NERVE},
++            {GROUP_NERVE, GROUP_MUSCLE, GROUP_RIM}
++    };
++    /** Вес этапа по порядку прохождения (одинаков для обоих режимов). Сумма = 1. */
+     private static final float[] WEIGHT = {0.30f, 0.40f, 0.30f};
+ 
+-    public static int stageOf(int index) {
++    public static int normMode(int mode) {
++        return mode == MODE_INSTALL ? MODE_INSTALL : MODE_CUT;
++    }
++
++    public static int groupOf(int index) {
+         if (index < 0 || index >= SEGMENTS) return -1;
+-        if (index < RIM) return STAGE_RIM;
+-        if (index < RIM + MUSCLES) return STAGE_MUSCLE;
+-        return STAGE_NERVE;
++        if (index < RIM) return GROUP_RIM;
++        if (index < RIM + MUSCLES) return GROUP_MUSCLE;
++        return GROUP_NERVE;
++    }
++
++    /** Какая группа сегментов обрабатывается на этапе stage в режиме mode. */
++    public static int groupAt(int mode, int stage) {
++        return ORDER[normMode(mode)][stage];
+     }
+ 
+-    public static int first(int stage) { return FIRST[stage]; }
+-    public static int count(int stage) { return COUNT[stage]; }
++    /** Номер этапа, на котором работает сегмент index, или -1. */
++    public static int stageOf(int mode, int index) {
++        int group = groupOf(index);
++        if (group < 0) return -1;
++        for (int s = 0; s < STAGES; s++) {
++            if (groupAt(mode, s) == group) return s;
++        }
++        return -1;
++    }
+ 
+-    public static boolean stageDone(float[] seg, int stage) {
+-        for (int i = FIRST[stage]; i < FIRST[stage] + COUNT[stage]; i++) {
++    public static int firstOf(int mode, int stage) { return GROUP_FIRST[groupAt(mode, stage)]; }
++    public static int countOf(int mode, int stage) { return GROUP_COUNT[groupAt(mode, stage)]; }
++
++    public static boolean stageDone(float[] seg, int mode, int stage) {
++        int first = firstOf(mode, stage);
++        int count = countOf(mode, stage);
++        for (int i = first; i < first + count; i++) {
+             if (seg[i] < 0.999f) return false;
+         }
+         return true;
+     }
+ 
+-    /** Первый незавершённый этап, STAGES - если всё готово. */
+-    public static int currentStage(float[] seg) {
++    /** Первый незавершённый этап; STAGES, если всё готово. */
++    public static int currentStage(float[] seg, int mode) {
+         for (int s = 0; s < STAGES; s++) {
+-            if (!stageDone(seg, s)) return s;
++            if (!stageDone(seg, mode, s)) return s;
+         }
+         return STAGES;
+     }
+ 
+-    public static float stageProgress(float[] seg, int stage) {
++    public static float stageProgress(float[] seg, int mode, int stage) {
++        int first = firstOf(mode, stage);
++        int count = countOf(mode, stage);
+         float sum = 0f;
+-        for (int i = FIRST[stage]; i < FIRST[stage] + COUNT[stage]; i++) sum += Math.min(1f, Math.max(0f, seg[i]));
+-        return sum / COUNT[stage];
++        for (int i = first; i < first + count; i++) sum += clamp01(seg[i]);
++        return sum / count;
+     }
+ 
+-    public static float total(float[] seg) {
++    public static float total(float[] seg, int mode) {
+         float t = 0f;
+-        for (int s = 0; s < STAGES; s++) t += WEIGHT[s] * stageProgress(seg, s);
+-        return Math.min(1f, t);
++        for (int s = 0; s < STAGES; s++) t += WEIGHT[s] * stageProgress(seg, mode, s);
++        return clamp01(t);
++    }
++
++    /** Раскладывает общий прогресс total по этапам и сегментам по порядку (обратная операция к total). */
++    public static void fromTotal(float total, int mode, float[] out) {
++        Arrays.fill(out, 0f);
++        float remaining = clamp01(total);
++        for (int s = 0; s < STAGES; s++) {
++            float frac = clamp01(remaining / WEIGHT[s]);
++            remaining = Math.max(0f, remaining - WEIGHT[s]);
++            int first = firstOf(mode, s);
++            int count = countOf(mode, s);
++            for (int k = 0; k < count; k++) {
++                out[first + k] = clamp01(frac * count - k);
++            }
++        }
++    }
++
++    /** Общий прогресс, который соответствует текущему здоровью мышц глаза (источник истины для сохранения прогресса). */
++    public static float impliedFromMuscle(float muscleHealth) {
++        return clamp01((100f - muscleHealth) / MUSCLE_DAMAGE_K);
++    }
++
++    /** Здоровье мышц, которое соответствует общему прогрессу. */
++    public static float muscleForTotal(float total) {
++        return 100f - MUSCLE_DAMAGE_K * clamp01(total);
++    }
++
++    private static float clamp01(float v) {
++        return v < 0f ? 0f : Math.min(v, 1f);
+     }
+ }
+diff --git a/src/main/java/ru/renat/doomedbgfix/eye/EyeImplantItem.java b/src/main/java/ru/renat/doomedbgfix/eye/EyeImplantItem.java
+index bebcaef..c9cfa86 100644
+--- a/src/main/java/ru/renat/doomedbgfix/eye/EyeImplantItem.java
++++ b/src/main/java/ru/renat/doomedbgfix/eye/EyeImplantItem.java
+@@ -11,7 +11,12 @@ import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.item.Item;
+ import net.minecraft.world.item.ItemStack;
+ import net.minecraft.world.level.Level;
++import ru.renat.doomedbgfix.server.EyeCutSessions;
+ 
++/**
++ * Готовый имплант. ПКМ в воздух - мини-игра установки себе в пустую глазницу.
++ * Установка другому игроку идёт через правый клик по нему (см. CoopMedicalEyeMixin).
++ */
+ public class EyeImplantItem extends Item {
+ 
+     public EyeImplantItem(Properties properties) {
+@@ -22,7 +27,7 @@ public class EyeImplantItem extends Item {
+     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+         ItemStack stack = player.getItemInHand(hand);
+         if (level.isClientSide) return InteractionResultHolder.success(stack);
+-        if (!(player instanceof ServerPlayer sp)) return InteractionResultHolder.fail(stack);
++        if (hand != InteractionHand.MAIN_HAND || !(player instanceof ServerPlayer sp)) return InteractionResultHolder.fail(stack);
+ 
+         DoomedData data = DoomedDataUtil.get(sp).orElse(null);
+         if (data == null || !data.isActive()) {
+@@ -36,12 +41,9 @@ public class EyeImplantItem extends Item {
+             return InteractionResultHolder.fail(stack);
+         }
+ 
+-        if (!EyeImplantHandler.install(sp, eyePart)) {
++        if (!EyeCutSessions.openSelf(sp, eyePart, EyeCutModel.MODE_INSTALL, false)) {
+             return InteractionResultHolder.fail(stack);
+         }
+-
+-        if (!sp.getAbilities().instabuild) stack.shrink(1);
+-        sp.displayClientMessage(Component.translatable("doomedbgfix.eye.implant.installed"), true);
+         return InteractionResultHolder.success(stack);
+     }
+ }
+diff --git a/src/main/java/ru/renat/doomedbgfix/eye/EyeTools.java b/src/main/java/ru/renat/doomedbgfix/eye/EyeTools.java
+index 51ac1b0..d0fedb3 100644
+--- a/src/main/java/ru/renat/doomedbgfix/eye/EyeTools.java
++++ b/src/main/java/ru/renat/doomedbgfix/eye/EyeTools.java
+@@ -6,12 +6,12 @@ import net.minecraft.tags.ItemTags;
+ import net.minecraft.tags.TagKey;
+ import net.minecraft.world.item.Item;
+ import net.minecraft.world.item.ItemStack;
++import ru.renat.doomedbgfix.registry.EyeItems;
+ 
+-/** Какими предметами можно вырезать глаз: нож для растений из Doomed и любое холодное оружие. */
++/** Какими предметами работают с глазом: вырезают (нож для растений и холодное оружие, без топоров) и ставят имплант. */
+ public final class EyeTools {
+ 
+     private static final TagKey<Item> FORGE_SWORDS  = forge("tools/swords");
+-    private static final TagKey<Item> FORGE_AXES    = forge("tools/axes");
+     private static final TagKey<Item> FORGE_KNIVES  = forge("tools/knives");
+     private static final TagKey<Item> FORGE_DAGGERS = forge("tools/daggers");
+ 
+@@ -24,8 +24,11 @@ public final class EyeTools {
+     public static boolean isEyeCutTool(ItemStack stack) {
+         if (stack == null || stack.isEmpty()) return false;
+         if (stack.is(DoomedItems.FORAGING_KNIFE.get())) return true;
+-        return stack.is(ItemTags.SWORDS) || stack.is(ItemTags.AXES)
+-                || stack.is(FORGE_SWORDS) || stack.is(FORGE_AXES)
++        return stack.is(ItemTags.SWORDS) || stack.is(FORGE_SWORDS)
+                 || stack.is(FORGE_KNIVES) || stack.is(FORGE_DAGGERS);
+     }
++
++    public static boolean isImplant(ItemStack stack) {
++        return stack != null && !stack.isEmpty() && stack.is(EyeItems.EYE_IMPLANT.get());
++    }
+ }
+diff --git a/src/main/java/ru/renat/doomedbgfix/mixin/CoopMedicalEyeMixin.java b/src/main/java/ru/renat/doomedbgfix/mixin/CoopMedicalEyeMixin.java
+index 517fd46..1889e3e 100644
+--- a/src/main/java/ru/renat/doomedbgfix/mixin/CoopMedicalEyeMixin.java
++++ b/src/main/java/ru/renat/doomedbgfix/mixin/CoopMedicalEyeMixin.java
+@@ -4,16 +4,25 @@ import net.mattlives.doomedmatu.body.BodyPart;
+ import net.mattlives.doomedmatu.body.CoopMedical;
+ import net.mattlives.doomedmatu.body.CoopTreatmentType;
+ import net.mattlives.doomedmatu.body.EyeFunctionService;
++import net.mattlives.doomedmatu.body.TreatmentKind;
++import net.mattlives.doomedmatu.capability.DoomedData;
+ import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.item.ItemStack;
+ import org.spongepowered.asm.mixin.Mixin;
+ import org.spongepowered.asm.mixin.injection.At;
+ import org.spongepowered.asm.mixin.injection.Inject;
+ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
++import ru.renat.doomedbgfix.eye.EyeCutModel;
++import ru.renat.doomedbgfix.eye.EyeTools;
+ import ru.renat.doomedbgfix.server.EyeCutSessions;
+ 
+ /**
+- * Doomed считает AMPUTATE допустимым только для конечностей (isAmputatable), глаза туда не входят.
+- * Для глаз перехватываем начало самолечения и запускаем свою мини-игру.
++ * Doomed знает AMPUTATE только для конечностей (isAmputatable), глаз там нет. Подключаем свои мини-игры:
++ *  1) самолечение: клик инструментом по глазу в панели здоровья -> удаление глаза;
++ *  2) правый клик по другому игроку с выбранным глазом: удаление глаза / установка импланта;
++ *  3) продолжение установки после того, как пациент дал согласие.
++ * Согласие на удаление Doomed обрабатывает сам и затем вызывает DismemberService.openAuthorizedMinigame
++ * (там стоит наша ветка в DismemberServiceMixin).
+  */
+ @Mixin(value = CoopMedical.class, remap = false)
+ public abstract class CoopMedicalEyeMixin {
+@@ -22,6 +31,20 @@ public abstract class CoopMedicalEyeMixin {
+     private static void bg$eyeAmputation(ServerPlayer player, CoopTreatmentType type, BodyPart part,
+                                          boolean forceInteractive, CallbackInfoReturnable<Boolean> cir) {
+         if (type != CoopTreatmentType.AMPUTATE || !EyeFunctionService.isEye(part)) return;
+-        cir.setReturnValue(EyeCutSessions.openSelf(player, part, forceInteractive));
++        cir.setReturnValue(EyeCutSessions.openSelf(player, part, EyeCutModel.MODE_CUT, forceInteractive));
++    }
++
++    @Inject(method = "startTreatment", at = @At("HEAD"), cancellable = true, remap = false)
++    private static void bg$eyeCoop(ServerPlayer healer, ServerPlayer patient, DoomedData pd, ItemStack held,
++                                   BodyPart aimedPart, CallbackInfoReturnable<Boolean> cir) {
++        if (EyeCutSessions.startCoop(healer, patient, pd, held, aimedPart)) cir.setReturnValue(true);
++    }
++
++    @Inject(method = "openAuthorizedConsentedTreatment", at = @At("HEAD"), cancellable = true, remap = false)
++    private static void bg$eyeInstallAfterConsent(ServerPlayer healer, ServerPlayer patient, BodyPart part,
++                                                  TreatmentKind kind, CallbackInfoReturnable<Boolean> cir) {
++        if (kind != TreatmentKind.INSTALL_PROSTHETIC || !EyeFunctionService.isEye(part)
++                || !EyeTools.isImplant(healer.getMainHandItem())) return;
++        cir.setReturnValue(EyeCutSessions.openCoop(healer, patient, part, EyeCutModel.MODE_INSTALL, false));
+     }
+ }
+diff --git a/src/main/java/ru/renat/doomedbgfix/mixin/DismemberServiceMixin.java b/src/main/java/ru/renat/doomedbgfix/mixin/DismemberServiceMixin.java
+index 93d5a57..4559d22 100644
+--- a/src/main/java/ru/renat/doomedbgfix/mixin/DismemberServiceMixin.java
++++ b/src/main/java/ru/renat/doomedbgfix/mixin/DismemberServiceMixin.java
+@@ -2,6 +2,7 @@ package ru.renat.doomedbgfix.mixin;
+ 
+ import net.mattlives.doomedmatu.body.BodyPart;
+ import net.mattlives.doomedmatu.body.DismemberService;
++import net.mattlives.doomedmatu.body.EyeFunctionService;
+ import net.mattlives.doomedmatu.capability.DoomedData;
+ import net.minecraft.server.level.ServerPlayer;
+ import org.spongepowered.asm.mixin.Mixin;
+@@ -10,6 +11,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
+ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+ import ru.renat.doomedbgfix.config.BGConfig;
++import ru.renat.doomedbgfix.eye.EyeCutModel;
++import ru.renat.doomedbgfix.server.EyeCutSessions;
+ import ru.renat.doomedbgfix.server.CutSessions;
+ import ru.renat.doomedbgfix.server.TourniquetFix;
+ 
+@@ -33,6 +36,11 @@ public abstract class DismemberServiceMixin {
+     private static void bg$openCoop(ServerPlayer healer, ServerPlayer patient, BodyPart part,
+                                     DismemberService.CutTool authorizedTool, boolean implied,
+                                     CallbackInfoReturnable<Boolean> cir) {
++        // Глаза не входят в DISTAL, но согласие на их удаление Doomed тоже завершает через этот метод.
++        if (EyeFunctionService.isEye(part)) {
++            cir.setReturnValue(EyeCutSessions.openCoop(healer, patient, part, EyeCutModel.MODE_CUT, false));
++            return;
++        }
+         if (!BGConfig.enableRework()) return;
+         cir.setReturnValue(CutSessions.openCoop(healer, patient, part, authorizedTool, false));
+     }
+diff --git a/src/main/java/ru/renat/doomedbgfix/net/BGNetwork.java b/src/main/java/ru/renat/doomedbgfix/net/BGNetwork.java
+index 3129771..f3f93d9 100644
+--- a/src/main/java/ru/renat/doomedbgfix/net/BGNetwork.java
++++ b/src/main/java/ru/renat/doomedbgfix/net/BGNetwork.java
+@@ -12,7 +12,7 @@ import java.util.Optional;
+ 
+ public final class BGNetwork {
+ 
+-    private static final String PROTOCOL = "2";
++    private static final String PROTOCOL = "3";
+     public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
+             .named(new ResourceLocation(DoomedBGFix.MODID, "cut"))
+             .networkProtocolVersion(() -> PROTOCOL)
+diff --git a/src/main/java/ru/renat/doomedbgfix/net/S2CEyeCutStatePacket.java b/src/main/java/ru/renat/doomedbgfix/net/S2CEyeCutStatePacket.java
+index c1b6054..e882f5d 100644
+--- a/src/main/java/ru/renat/doomedbgfix/net/S2CEyeCutStatePacket.java
++++ b/src/main/java/ru/renat/doomedbgfix/net/S2CEyeCutStatePacket.java
+@@ -9,7 +9,7 @@ import ru.renat.doomedbgfix.eye.EyeCutModel;
+ import java.util.function.Supplier;
+ 
+ public record S2CEyeCutStatePacket(long token, int part, int stage, float[] progress,
+-                                   boolean valid, boolean severed, LimbView view) {
++                                   boolean valid, boolean done, LimbView view) {
+ 
+     public void encode(FriendlyByteBuf buf) {
+         buf.writeLong(token);
+@@ -17,7 +17,7 @@ public record S2CEyeCutStatePacket(long token, int part, int stage, float[] prog
+         buf.writeVarInt(stage);
+         for (int i = 0; i < EyeCutModel.SEGMENTS; i++) buf.writeFloat(progress[i]);
+         buf.writeBoolean(valid);
+-        buf.writeBoolean(severed);
++        buf.writeBoolean(done);
+         buf.writeBoolean(view != null);
+         if (view != null) view.encode(buf);
+     }
+@@ -29,9 +29,9 @@ public record S2CEyeCutStatePacket(long token, int part, int stage, float[] prog
+         float[] progress = new float[EyeCutModel.SEGMENTS];
+         for (int i = 0; i < progress.length; i++) progress[i] = buf.readFloat();
+         boolean valid = buf.readBoolean();
+-        boolean severed = buf.readBoolean();
++        boolean done = buf.readBoolean();
+         LimbView view = buf.readBoolean() ? LimbView.decode(buf) : null;
+-        return new S2CEyeCutStatePacket(token, part, stage, progress, valid, severed, view);
++        return new S2CEyeCutStatePacket(token, part, stage, progress, valid, done, view);
+     }
+ 
+     public void handle(Supplier<NetworkEvent.Context> ctx) {
+diff --git a/src/main/java/ru/renat/doomedbgfix/net/S2COpenEyeCutPacket.java b/src/main/java/ru/renat/doomedbgfix/net/S2COpenEyeCutPacket.java
+index 42b9ec4..74802f6 100644
+--- a/src/main/java/ru/renat/doomedbgfix/net/S2COpenEyeCutPacket.java
++++ b/src/main/java/ru/renat/doomedbgfix/net/S2COpenEyeCutPacket.java
+@@ -1,5 +1,6 @@
+ package ru.renat.doomedbgfix.net;
+ 
++import net.mattlives.doomedmatu.body.PatientSnapshot;
+ import net.minecraft.network.FriendlyByteBuf;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.fml.DistExecutor;
+@@ -8,25 +9,32 @@ import ru.renat.doomedbgfix.eye.EyeCutModel;
+ 
+ import java.util.function.Supplier;
+ 
+-public record S2COpenEyeCutPacket(int part, long token, float[] progress, LimbView view,
+-                                  boolean forceInteractive) {
++public record S2COpenEyeCutPacket(int part, int patientId, long token, int mode, float[] progress,
++                                  LimbView view, PatientSnapshot snapshot, boolean forceInteractive) {
+ 
+     public void encode(FriendlyByteBuf buf) {
+         buf.writeVarInt(part);
++        buf.writeInt(patientId);
+         buf.writeLong(token);
++        buf.writeVarInt(mode);
+         for (int i = 0; i < EyeCutModel.SEGMENTS; i++) buf.writeFloat(progress[i]);
+         view.encode(buf);
++        buf.writeBoolean(snapshot != null);
++        if (snapshot != null) snapshot.encode(buf);
+         buf.writeBoolean(forceInteractive);
+     }
+ 
+     public static S2COpenEyeCutPacket decode(FriendlyByteBuf buf) {
+         int part = buf.readVarInt();
++        int patientId = buf.readInt();
+         long token = buf.readLong();
++        int mode = buf.readVarInt();
+         float[] progress = new float[EyeCutModel.SEGMENTS];
+         for (int i = 0; i < progress.length; i++) progress[i] = buf.readFloat();
+         LimbView view = LimbView.decode(buf);
++        PatientSnapshot snapshot = buf.readBoolean() ? PatientSnapshot.decode(buf) : null;
+         boolean force = buf.readBoolean();
+-        return new S2COpenEyeCutPacket(part, token, progress, view, force);
++        return new S2COpenEyeCutPacket(part, patientId, token, mode, progress, view, snapshot, force);
+     }
+ 
+     public void handle(Supplier<NetworkEvent.Context> ctx) {
+diff --git a/src/main/java/ru/renat/doomedbgfix/server/EyeCutSession.java b/src/main/java/ru/renat/doomedbgfix/server/EyeCutSession.java
+index 5eec6cc..50f5ae0 100644
+--- a/src/main/java/ru/renat/doomedbgfix/server/EyeCutSession.java
++++ b/src/main/java/ru/renat/doomedbgfix/server/EyeCutSession.java
+@@ -8,15 +8,28 @@ import java.util.UUID;
+ public final class EyeCutSession {
+     public final long token;
+     public final UUID operator;
++    public final UUID patient;
++    /** Id сущности пациента для клиента, -1 если оператор оперирует себя. */
++    public final int patientId;
++    public final boolean self;
+     public final BodyPart part;
++    public final int mode;
+     public final float[] seg = new float[EyeCutModel.SEGMENTS];
+-    public int stage = EyeCutModel.STAGE_RIM;
+     public long lastInputTick;
+ 
+-    public EyeCutSession(long token, UUID operator, BodyPart part, long tick) {
++    public EyeCutSession(long token, UUID operator, UUID patient, int patientId, boolean self,
++                         BodyPart part, int mode, long tick) {
+         this.token = token;
+         this.operator = operator;
++        this.patient = patient;
++        this.patientId = patientId;
++        this.self = self;
+         this.part = part;
++        this.mode = mode;
+         this.lastInputTick = tick;
+     }
++
++    public int stage() {
++        return EyeCutModel.currentStage(seg, mode);
++    }
+ }
+diff --git a/src/main/java/ru/renat/doomedbgfix/server/EyeCutSessions.java b/src/main/java/ru/renat/doomedbgfix/server/EyeCutSessions.java
+index 6bab38c..9ae3a4a 100644
+--- a/src/main/java/ru/renat/doomedbgfix/server/EyeCutSessions.java
++++ b/src/main/java/ru/renat/doomedbgfix/server/EyeCutSessions.java
+@@ -1,17 +1,24 @@
+ package ru.renat.doomedbgfix.server;
+ 
+ import net.mattlives.doomedmatu.body.BodyPart;
++import net.mattlives.doomedmatu.body.ConsentGate;
+ import net.mattlives.doomedmatu.body.CoopMedical;
+ import net.mattlives.doomedmatu.body.EyeFunctionService;
+ import net.mattlives.doomedmatu.body.HandFunctionService;
+ import net.mattlives.doomedmatu.body.LimbData;
++import net.mattlives.doomedmatu.body.PatientSnapshot;
++import net.mattlives.doomedmatu.body.TreatmentKind;
+ import net.mattlives.doomedmatu.capability.DoomedData;
+ import net.mattlives.doomedmatu.capability.DoomedDataUtil;
++import net.mattlives.doomedmatu.config.DoomedConfig;
++import net.minecraft.network.chat.Component;
+ import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.item.ItemStack;
+ import ru.renat.doomedbgfix.config.BGConfig;
+ import ru.renat.doomedbgfix.cut.CutMath;
+ import ru.renat.doomedbgfix.eye.EyeAmputationHandler;
+ import ru.renat.doomedbgfix.eye.EyeCutModel;
++import ru.renat.doomedbgfix.eye.EyeImplantHandler;
+ import ru.renat.doomedbgfix.eye.EyeTools;
+ import ru.renat.doomedbgfix.net.BGNetwork;
+ import ru.renat.doomedbgfix.net.LimbView;
+@@ -23,65 +30,187 @@ import java.util.Map;
+ import java.util.UUID;
+ 
+ /**
+- * Мини-игра удаления глаза (сам себе). Сервер хранит прогресс по 13 сегментам и считает
+- * боль, кровь и повреждение тканей. Клиент только присылает "сколько прорезал".
++ * Мини-игры с глазом: удаление (MODE_CUT) и установка импланта (MODE_INSTALL),
++ * на себе и на другом игроке. Сервер хранит прогресс 13 сегментов и считает боль, кровь и травму,
++ * клиент присылает только "сколько проведено".
++ *
++ * Прогресс удаления не хранится отдельно: он выводится из здоровья мышц глаза (как глубина реза
++ * у конечностей выводится из кожи и мышц). Резали глаз, бросили, вернулись - этапы восстановятся
++ * по мышцам, а по мере их заживления прогресс сам откатывается.
+  */
+ public final class EyeCutSessions {
+ 
+     private static final Map<UUID, EyeCutSession> BY_OPERATOR = new HashMap<>();
+ 
+-    /** Максимум прогресса одного сегмента в секунду (защита от подделки пакетов). */
++    /** Предел прогресса сегмента за тик и за пакет (защита от подделки пакетов). */
+     private static final float MAX_PER_TICK = 0.045f;
+     private static final float MAX_PER_PACKET = 0.30f;
+ 
+-    // Боль / кровь / травма за ПОЛНЫЙ этап (делится поровну между сегментами этапа).
+-    // Для сравнения: пила режет конечность примерно на 60-100 боли, тут глаз упирается в 100 уже к мышцам.
+-    private static final float[] PAIN_FULL   = {45f, 70f, 100f};
+-    private static final float[] BLEED_FULL  = {10f, 14f, 8f};
+-    private static final float[] TRAUMA_FULL = {4f, 8f, 10f};
++    private static final double COOP_RANGE_SQ = 36.0;
++
++    // Боль / кровь / травма за ПОЛНЫЙ этап (делится поровну между его сегментами). Индексы: [режим][этап по порядку].
++    // Удаление намного больнее обычной ампутации, установка заметно мягче.
++    private static final float[][] PAIN_FULL   = {{45f, 70f, 100f}, {10f, 14f, 8f}};
++    private static final float[][] BLEED_FULL  = {{10f, 14f, 8f},   {0f, 3f, 2f}};
++    private static final float[][] TRAUMA_FULL = {{4f, 8f, 10f},    {0f, 2f, 2f}};
+     private static final float HEAD_PAIN_SHARE = 0.4f;
+     private static final float HEAD_BLEED_SHARE = 0.5f;
+ 
++    /** Потолок прогресса при открытии/синхронизации, чтобы "почти готовый" глаз не завершился сам по себе. */
++    private static final float OPEN_CAP = 0.97f;
++    private static final float SYNC_CAP = 0.995f;
++    private static final float SYNC_TOLERANCE = 0.02f;
++
+     private EyeCutSessions() {}
+ 
+-    public static boolean openSelf(ServerPlayer player, BodyPart part, boolean forceInteractive) {
+-        DoomedData data = CutBridge.data(player);
+-        if (data == null || !data.isActive() || !EyeFunctionService.isEye(part)
+-                || data.getLimb(part).isDismembered()
+-                || !EyeEligibility.canStart(player)) {
+-            return false;
++    // ------------------------------------------------------------------ вход
++
++    public static boolean openSelf(ServerPlayer player, BodyPart part, int mode, boolean forceInteractive) {
++        if (!CoopMedical.canSelfTreat(player)) return false;
++        return start(player, player, part, mode, forceInteractive);
++    }
++
++    public static boolean openCoop(ServerPlayer healer, ServerPlayer patient, BodyPart part, int mode, boolean forceInteractive) {
++        if (healer == patient || healer.distanceToSqr(patient) > COOP_RANGE_SQ || !healer.hasLineOfSight(patient)) return false;
++        return start(healer, patient, part, mode, forceInteractive);
++    }
++
++    /**
++     * Обработка правого клика по игроку с выбранным глазом (или головой) на панели WITNESS.
++     * @return true, если действие обработано (Doomed дальше ничего не делает)
++     */
++    public static boolean startCoop(ServerPlayer healer, ServerPlayer patient, DoomedData pd, ItemStack held, BodyPart aimed) {
++        if (aimed == null || pd == null || !pd.isActive()) return false;
++        boolean aimsEye = EyeFunctionService.isEye(aimed) || aimed == BodyPart.HEAD;
++        if (!aimsEye) return false;
++
++        if (EyeTools.isImplant(held)) {
++            BodyPart part = pickEye(pd, aimed, true);
++            if (part == null) {
++                healer.displayClientMessage(Component.translatable("doomedbgfix.eye.implant.no_empty_socket_other"), true);
++                return true;
++            }
++            // Как у протезов Doomed: согласие -> после ответа вызовется openAuthorizedConsentedTreatment (см. миксин).
++            if (ConsentGate.requestDeferredTreatment(healer, patient, TreatmentKind.INSTALL_PROSTHETIC, part)) {
++                openCoop(healer, patient, part, EyeCutModel.MODE_INSTALL, false);
++            }
++            return true;
+         }
+-        long token = player.getRandom().nextLong();
++
++        if (EyeTools.isEyeCutTool(held)) {
++            BodyPart part = pickEye(pd, aimed, false);
++            if (part == null) return false;
++            if (!DoomedConfig.crossPlayerAmputation()) {
++                healer.displayClientMessage(Component.translatable("doomedbgfix.eye.cut.coop_disabled"), true);
++                return true;
++            }
++            if (!HandFunctionService.canPerformTwoHanded(healer)) {
++                healer.displayClientMessage(Component.translatable("doomedbgfix.eye.cut.two_hands"), true);
++                return true;
++            }
++            if (DoomedConfig.requireCrossPlayerTreatmentConsent()) {
++                // Здоровый глаз ещё можно спасти, поэтому без ответа пациента (без сознания) не режем.
++                if (ConsentGate.cannotAnswer(patient)) {
++                    healer.displayClientMessage(Component.translatable("doomedbgfix.eye.cut.cannot_answer"), true);
++                    return true;
++                }
++                // false = пациенту отправлен запрос; после согласия Doomed вызовет openAuthorizedMinigame (см. миксин).
++                if (!ConsentGate.clears(healer, patient, TreatmentKind.AMPUTATE, part, 0.0f)) return true;
++            }
++            openCoop(healer, patient, part, EyeCutModel.MODE_CUT, false);
++            return true;
++        }
++        return false;
++    }
++
++    /** Нужный глаз: тот, что выбран, иначе первый подходящий (левый приоритетнее). null - подходящих нет. */
++    public static BodyPart pickEye(DoomedData pd, BodyPart aimed, boolean absent) {
++        if (EyeFunctionService.isEye(aimed)) {
++            return EyeFunctionService.isAbsent(pd, aimed) == absent ? aimed : null;
++        }
++        if (EyeFunctionService.isAbsent(pd, BodyPart.EYE_LEFT) == absent) return BodyPart.EYE_LEFT;
++        if (EyeFunctionService.isAbsent(pd, BodyPart.EYE_RIGHT) == absent) return BodyPart.EYE_RIGHT;
++        return null;
++    }
++
++    private static boolean start(ServerPlayer operator, ServerPlayer patient, BodyPart part, int mode, boolean force) {
++        mode = EyeCutModel.normMode(mode);
++        DoomedData pd = CutBridge.data(patient);
++        if (!eligible(operator, pd, part, mode)) return false;
++
++        boolean self = operator == patient;
++        long token = operator.getRandom().nextLong();
+         if (token == 0L) token = 1L;
+-        long now = player.serverLevel().getGameTime();
+-        EyeCutSession session = new EyeCutSession(token, player.getUUID(), part, now);
+-        BY_OPERATOR.put(player.getUUID(), session);
++        long now = operator.serverLevel().getGameTime();
++        EyeCutSession s = new EyeCutSession(token, operator.getUUID(), patient.getUUID(),
++                self ? -1 : patient.getId(), self, part, mode, now);
++
++        if (mode == EyeCutModel.MODE_CUT) {
++            // Начинаем с того места, которое уже "намотали" мышцы глаза.
++            float implied = Math.min(OPEN_CAP, EyeCutModel.impliedFromMuscle(pd.getLimb(part).getMuscleHealth()));
++            EyeCutModel.fromTotal(implied, mode, s.seg);
++        }
++        BY_OPERATOR.put(operator.getUUID(), s);
+ 
+-        BGNetwork.sendOpenEye(player, new S2COpenEyeCutPacket(part.ordinal(), token, session.seg.clone(),
+-                LimbView.of(data, part), forceInteractive));
++        BGNetwork.sendOpenEye(operator, new S2COpenEyeCutPacket(part.ordinal(), s.patientId, token, mode,
++                s.seg.clone(), LimbView.of(pd, part), PatientSnapshot.of(pd), force));
+         return true;
+     }
+ 
++    // ------------------------------------------------------------------ условия
++
++    private static boolean toolOk(ServerPlayer operator, int mode) {
++        ItemStack held = operator.getMainHandItem();
++        return mode == EyeCutModel.MODE_INSTALL ? EyeTools.isImplant(held) : EyeTools.isEyeCutTool(held);
++    }
++
++    private static boolean eyeStateOk(DoomedData pd, BodyPart part, int mode) {
++        boolean absent = EyeFunctionService.isAbsent(pd, part);
++        return mode == EyeCutModel.MODE_INSTALL ? absent : !absent;
++    }
++
++    private static boolean eligible(ServerPlayer operator, DoomedData pd, BodyPart part, int mode) {
++        return pd != null && pd.isActive() && EyeFunctionService.isEye(part)
++                && eyeStateOk(pd, part, mode)
++                && toolOk(operator, mode)
++                && HandFunctionService.canPerformTwoHanded(operator);
++    }
++
++    private static boolean valid(ServerPlayer operator, ServerPlayer patient, DoomedData pd, EyeCutSession s) {
++        if (operator == null || !operator.isAlive() || patient == null || pd == null || !pd.isActive()) return false;
++        if (!eligible(operator, pd, s.part, s.mode)) return false;
++        return s.self || (operator.distanceToSqr(patient) <= COOP_RANGE_SQ && operator.hasLineOfSight(patient));
++    }
++
++    // ------------------------------------------------------------------ работа
++
+     public static void work(ServerPlayer operator, long token, int partOrdinal, int index, float delta) {
+         EyeCutSession s = BY_OPERATOR.get(operator.getUUID());
+         if (s == null || s.token != token || partOrdinal != s.part.ordinal()) return;
+         if (!Float.isFinite(delta) || delta <= 0f) return;
+-        if (EyeCutModel.stageOf(index) != s.stage) return;
+ 
+-        DoomedData data = CutBridge.data(operator);
+-        if (!valid(operator, data, s)) {
++        ServerPlayer patient = s.self ? operator : CoopMedical.resolvePatient(operator, s.patientId);
++        DoomedData pd = patient == null ? null : CutBridge.data(patient);
++        if (!valid(operator, patient, pd, s)) {
+             BY_OPERATOR.remove(operator.getUUID());
+-            BGNetwork.sendEyeState(operator, new S2CEyeCutStatePacket(token, s.part.ordinal(), s.stage,
+-                    s.seg.clone(), false, false, data == null ? null : LimbView.of(data, s.part)));
++            BGNetwork.sendEyeState(operator, new S2CEyeCutStatePacket(token, s.part.ordinal(),
++                    Math.min(s.stage(), EyeCutModel.STAGES - 1), s.seg.clone(), false, false,
++                    pd == null ? null : LimbView.of(pd, s.part)));
+             return;
+         }
+ 
++        if (s.mode == EyeCutModel.MODE_CUT) syncFromMuscle(pd, s);
++
++        int stage = s.stage();
++        if (stage >= EyeCutModel.STAGES || EyeCutModel.stageOf(s.mode, index) != stage) return;
++
+         long now = operator.serverLevel().getGameTime();
+         long ticks = Math.max(1L, Math.min(20L, now - s.lastInputTick));
+         s.lastInputTick = now;
+ 
+-        float cap = Math.min(MAX_PER_PACKET, MAX_PER_TICK * ticks);
+-        float effort = CutMath.effort(data.getConsciousness(), data.getPain());
++        DoomedData od = CutBridge.data(operator);
++        float effort = od == null || !od.isActive() ? 1f : CutMath.effort(od.getConsciousness(), od.getPain());
++        float cap = Math.min(MAX_PER_PACKET, MAX_PER_TICK * (float) ticks);
+         float applied = Math.min(delta, cap) * effort;
+ 
+         float before = s.seg[index];
+@@ -89,58 +218,72 @@ public final class EyeCutSessions {
+         float gained = after - before;
+         if (gained > 0f) {
+             s.seg[index] = after;
+-            applyEffects(data, s, gained);
++            applyEffects(pd, s, stage, gained);
+         }
+ 
+-        boolean finished = false;
+-        if (EyeCutModel.stageDone(s.seg, s.stage)) {
+-            s.stage++;
+-            if (s.stage >= EyeCutModel.STAGES) {
+-                finished = EyeAmputationHandler.perform(operator, s.part);
+-                BY_OPERATOR.remove(operator.getUUID());
+-            }
++        boolean done = EyeCutModel.currentStage(s.seg, s.mode) >= EyeCutModel.STAGES;
++        boolean completed = false;
++        if (done) {
++            completed = s.mode == EyeCutModel.MODE_CUT
++                    ? EyeAmputationHandler.perform(patient, s.part, operator)
++                    : finishInstall(operator, patient, s.part);
++            BY_OPERATOR.remove(operator.getUUID());
++        } else {
++            DoomedDataUtil.sync(patient);
+         }
+-        if (!finished) DoomedDataUtil.sync(operator);
+ 
+         BGNetwork.sendEyeState(operator, new S2CEyeCutStatePacket(token, s.part.ordinal(),
+-                Math.min(s.stage, EyeCutModel.STAGES - 1), s.seg.clone(), !(s.stage >= EyeCutModel.STAGES) || finished,
+-                finished, LimbView.of(data, s.part)));
++                Math.min(s.stage(), EyeCutModel.STAGES - 1), s.seg.clone(), !done || completed, completed,
++                LimbView.of(pd, s.part)));
++    }
++
++    /** Мышцы - источник истины: если они зажили (или глаз травмировали иначе), прогресс подтягивается к ним. */
++    private static void syncFromMuscle(DoomedData pd, EyeCutSession s) {
++        float implied = Math.min(SYNC_CAP, EyeCutModel.impliedFromMuscle(pd.getLimb(s.part).getMuscleHealth()));
++        if (Math.abs(EyeCutModel.total(s.seg, s.mode) - implied) > SYNC_TOLERANCE) {
++            EyeCutModel.fromTotal(implied, s.mode, s.seg);
++        }
+     }
+ 
+-    private static void applyEffects(DoomedData data, EyeCutSession s, float gained) {
+-        int stage = s.stage;
+-        int count = EyeCutModel.count(stage);
+-        LimbData eye = data.getLimb(s.part);
+-        LimbData head = data.getLimb(BodyPart.HEAD);
++    private static void applyEffects(DoomedData pd, EyeCutSession s, int stage, float gained) {
++        int count = EyeCutModel.countOf(s.mode, stage);
++        LimbData eye = pd.getLimb(s.part);
++        LimbData head = pd.getLimb(BodyPart.HEAD);
+ 
+-        float pain = gained * PAIN_FULL[stage] / count * BGConfig.painScale() * (1.0f - CutBridge.analgesia(data));
++        float pain = gained * PAIN_FULL[s.mode][stage] / count * BGConfig.painScale() * (1.0f - CutBridge.analgesia(pd));
+         eye.setPain(eye.getPain() + pain);
+         head.setPain(head.getPain() + pain * HEAD_PAIN_SHARE);
+ 
+-        float bleed = gained * BLEED_FULL[stage] / count * BGConfig.bleedScale();
++        float bleed = gained * BLEED_FULL[s.mode][stage] / count * BGConfig.bleedScale();
+         eye.setBleed(eye.getBleed() + bleed);
+         head.setBleed(head.getBleed() + bleed * HEAD_BLEED_SHARE);
+ 
+-        data.addTrauma(gained * TRAUMA_FULL[stage] / count);
+-        data.setAdrenaline(Math.max(data.getAdrenaline(), 35f));
++        pd.addTrauma(gained * TRAUMA_FULL[s.mode][stage] / count);
++        pd.setAdrenaline(Math.max(pd.getAdrenaline(), 35f));
+ 
+-        // Ткани портятся по мере реза (но не до нуля: нуль = "глаза нет", это делает removeEye в конце).
+-        float rim = EyeCutModel.stageProgress(s.seg, EyeCutModel.STAGE_RIM);
+-        float muscle = EyeCutModel.stageProgress(s.seg, EyeCutModel.STAGE_MUSCLE);
+-        eye.setSkinHealth(Math.min(eye.getSkinHealth(), 100f - 85f * rim));
+-        eye.setMuscleHealth(Math.min(eye.getMuscleHealth(), 100f - 85f * muscle));
++        if (s.mode == EyeCutModel.MODE_CUT) {
++            // Прогресс привязан к мышцам. Кожа только позволяет крови держаться (BleedHandler обрезает кровь
++            // до 100 * (1 - skin/100)), поэтому снижаем её вместе с прогрессом, но не до нуля.
++            float total = EyeCutModel.total(s.seg, s.mode);
++            eye.setMuscleHealth(Math.min(eye.getMuscleHealth(), EyeCutModel.muscleForTotal(total)));
++            eye.setSkinHealth(Math.min(eye.getSkinHealth(), 100f - 85f * total));
++        }
+     }
+ 
+-    private static boolean valid(ServerPlayer operator, DoomedData data, EyeCutSession s) {
+-        if (operator == null || !operator.isAlive() || data == null || !data.isActive()) return false;
+-        if (data.getLimb(s.part).isDismembered()) return false;
+-        return EyeEligibility.canContinue(operator);
++    private static boolean finishInstall(ServerPlayer operator, ServerPlayer patient, BodyPart part) {
++        ItemStack held = operator.getMainHandItem();
++        if (!EyeTools.isImplant(held)) return false;
++        if (!EyeImplantHandler.install(patient, part)) return false;
++        if (!operator.getAbilities().instabuild) held.shrink(1);
++        return true;
+     }
+ 
++    // ------------------------------------------------------------------ жизненный цикл
++
+     public static void stop(ServerPlayer operator, long token) {
+         EyeCutSession s = BY_OPERATOR.get(operator.getUUID());
+         if (s != null && s.token == token) BY_OPERATOR.remove(operator.getUUID());
+-        // Прогресс не копится: следующая попытка начнётся с нуля, но раны и боль остаются.
++        // Прогресс удаления сохраняется в мышцах глаза, прогресс установки не сохраняется (имплант остаётся у оператора).
+     }
+ 
+     public static void tick(ServerPlayer player) {
+@@ -153,14 +296,4 @@ public final class EyeCutSessions {
+     public static void forget(UUID player) {
+         BY_OPERATOR.remove(player);
+     }
+-
+-    /** Условия на игрока и инструмент вынесены отдельно, чтобы start и continue не расходились. */
+-    private static final class EyeEligibility {
+-        static boolean canContinue(ServerPlayer p) {
+-            return EyeTools.isEyeCutTool(p.getMainHandItem()) && HandFunctionService.canPerformTwoHanded(p);
+-        }
+-        static boolean canStart(ServerPlayer p) {
+-            return CoopMedical.canSelfTreat(p) && canContinue(p);
+-        }
+-    }
+ }
+diff --git a/src/main/resources/assets/doomedbgfix/lang/en_us.json b/src/main/resources/assets/doomedbgfix/lang/en_us.json
+index 0279a1a..f3a3c7a 100644
+--- a/src/main/resources/assets/doomedbgfix/lang/en_us.json
++++ b/src/main/resources/assets/doomedbgfix/lang/en_us.json
+@@ -28,5 +28,16 @@
+   "doomedbgfix.eye.cut.stage.2": "Cut the optic nerve",
+   "doomedbgfix.eye.cut.hint.0": "Hold LMB and trace the scalpel around the rim of the eye",
+   "doomedbgfix.eye.cut.hint.1": "Saw back and forth across each muscle",
+-  "doomedbgfix.eye.cut.hint.2": "Cut across the optic nerve at the bottom"
++  "doomedbgfix.eye.cut.hint.2": "Cut across the optic nerve at the bottom",
++  "doomedbgfix.eye.install.title": "Eye implant installation",
++  "doomedbgfix.eye.install.stage.0": "Connect the optic nerve",
++  "doomedbgfix.eye.install.stage.1": "Attach the eye muscles",
++  "doomedbgfix.eye.install.stage.2": "Suture the rim of the socket",
++  "doomedbgfix.eye.install.hint.0": "Hold and move the tweezers across the nerve",
++  "doomedbgfix.eye.install.hint.1": "Hold and move across each muscle to attach it",
++  "doomedbgfix.eye.install.hint.2": "Hold and trace the ring to suture it",
++  "doomedbgfix.eye.implant.no_empty_socket_other": "They have no empty eye socket.",
++  "doomedbgfix.eye.cut.coop_disabled": "This server does not allow operating on other people.",
++  "doomedbgfix.eye.cut.two_hands": "That takes two working hands.",
++  "doomedbgfix.eye.cut.cannot_answer": "Their eye could still be saved, and they cannot answer."
+ }
+diff --git a/src/main/resources/assets/doomedbgfix/lang/ru_ru.json b/src/main/resources/assets/doomedbgfix/lang/ru_ru.json
+index f0fb8ef..8c2e214 100644
+--- a/src/main/resources/assets/doomedbgfix/lang/ru_ru.json
++++ b/src/main/resources/assets/doomedbgfix/lang/ru_ru.json
+@@ -28,5 +28,16 @@
+   "doomedbgfix.eye.cut.stage.2": "Перерезать зрительный нерв",
+   "doomedbgfix.eye.cut.hint.0": "Зажмите ЛКМ и ведите скальпелем по ободку глаза",
+   "doomedbgfix.eye.cut.hint.1": "Водите скальпелем поперёк каждой мышцы туда-сюда",
+-  "doomedbgfix.eye.cut.hint.2": "Режьте поперёк зрительного нерва внизу"
++  "doomedbgfix.eye.cut.hint.2": "Режьте поперёк зрительного нерва внизу",
++  "doomedbgfix.eye.install.title": "Установка глазного импланта",
++  "doomedbgfix.eye.install.stage.0": "Подключите зрительный нерв",
++  "doomedbgfix.eye.install.stage.1": "Закрепите глазные мышцы",
++  "doomedbgfix.eye.install.stage.2": "Зашейте края глазницы",
++  "doomedbgfix.eye.install.hint.0": "Зажмите и водите пинцетом поперёк нерва",
++  "doomedbgfix.eye.install.hint.1": "Зажмите и водите поперёк каждой мышцы, чтобы закрепить её",
++  "doomedbgfix.eye.install.hint.2": "Зажмите и ведите по кольцу, чтобы зашить его",
++  "doomedbgfix.eye.implant.no_empty_socket_other": "У пациента нет пустой глазницы.",
++  "doomedbgfix.eye.cut.coop_disabled": "Этот сервер не разрешает оперировать других игроков.",
++  "doomedbgfix.eye.cut.two_hands": "Для этого нужны две рабочие руки.",
++  "doomedbgfix.eye.cut.cannot_answer": "Глаз ещё можно спасти, а пациент не может ответить."
+ }
+diff --git a/src/main/resources/assets/doomedbgfix/models/item/empty_eye_implant.json b/src/main/resources/assets/doomedbgfix/models/item/empty_eye_implant.json
+index 992e48d..58f0b77 100644
+--- a/src/main/resources/assets/doomedbgfix/models/item/empty_eye_implant.json
++++ b/src/main/resources/assets/doomedbgfix/models/item/empty_eye_implant.json
+@@ -2,5 +2,13 @@
+   "parent": "item/generated",
+   "textures": {
+     "layer0": "doomedbgfix:item/empty_eye_implant"
++  },
++  "display": {
++    "thirdperson_righthand": { "rotation": [0, 0, 0],    "translation": [0, 2.5, 1], "scale": [0.38, 0.38, 0.38] },
++    "thirdperson_lefthand":  { "rotation": [0, 0, 0],    "translation": [0, 2.5, 1], "scale": [0.38, 0.38, 0.38] },
++    "firstperson_righthand": { "rotation": [0, -90, 25], "translation": [1.13, 3.2, 1.13], "scale": [0.46, 0.46, 0.46] },
++    "firstperson_lefthand":  { "rotation": [0, 90, -25], "translation": [1.13, 3.2, 1.13], "scale": [0.46, 0.46, 0.46] },
++    "ground":                { "rotation": [0, 0, 0],    "translation": [0, 2, 0],   "scale": [0.35, 0.35, 0.35] },
++    "fixed":                 { "rotation": [0, 0, 0],    "translation": [0, 0, 0],   "scale": [0.5, 0.5, 0.5] }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/resources/assets/doomedbgfix/models/item/eye_implant.json b/src/main/resources/assets/doomedbgfix/models/item/eye_implant.json
+index 60a455f..59fd5b6 100644
+--- a/src/main/resources/assets/doomedbgfix/models/item/eye_implant.json
++++ b/src/main/resources/assets/doomedbgfix/models/item/eye_implant.json
+@@ -2,5 +2,13 @@
+   "parent": "item/generated",
+   "textures": {
+     "layer0": "doomedbgfix:item/eye_implant"
++  },
++  "display": {
++    "thirdperson_righthand": { "rotation": [0, 0, 0],    "translation": [0, 2.5, 1], "scale": [0.38, 0.38, 0.38] },
++    "thirdperson_lefthand":  { "rotation": [0, 0, 0],    "translation": [0, 2.5, 1], "scale": [0.38, 0.38, 0.38] },
++    "firstperson_righthand": { "rotation": [0, -90, 25], "translation": [1.13, 3.2, 1.13], "scale": [0.46, 0.46, 0.46] },
++    "firstperson_lefthand":  { "rotation": [0, 90, -25], "translation": [1.13, 3.2, 1.13], "scale": [0.46, 0.46, 0.46] },
++    "ground":                { "rotation": [0, 0, 0],    "translation": [0, 2, 0],   "scale": [0.35, 0.35, 0.35] },
++    "fixed":                 { "rotation": [0, 0, 0],    "translation": [0, 0, 0],   "scale": [0.5, 0.5, 0.5] }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/resources/assets/doomedbgfix/textures/item/empty_eye_implant.png b/src/main/resources/assets/doomedbgfix/textures/item/empty_eye_implant.png
+index 71e83613ac4bbb86a9921489ffc24fa2669974ef..a63ef3805c4d8450aba77109e23a27c34f2aa7ed 100644
+GIT binary patch
+delta 228
+zcmV<A02}|80)PULB!9<AL_t(|oZXVG5`sV!Mvp&lA<-@*0~RA>t4|<0qc&f_CNt`5
+zU^J3ks?foQuqv|_VMJJ*A$r>Gz2BMLy$k=1>+a;q^Q1GINmWm)YST1Fa=lujX&L|`
+z5F~NJHH;AAQpj}c!XglbnxPK><fo)0$Pj_xus`N&+qNqE+FdF^Mw&ir>q<cqCjfLh
+z%0mK*EBL+-z<lA9gx@Hq@P4qIYZw8PrcfyWm|A0byFW1WLFM>r*-VDYkMooB)@mLe
+e_j}F5O?d(1D@H3Ka``X-0000<MNUMnLSTYH<Y*=U
+
+delta 251
+zcmV<X00jSl0+#}iB!AvXL_t(|oW+v84Z<)GMjymmU_s&ZPAZDfBweU!*#H=T1=zzi
+zq6`Z_4fLeT7$8#-<;MYmkoY?L?tORm9sFCpu0Rw`Z1sFR9-O(t1%`n}`3iv1a0EaY
+zXnQ(eT1LVJCrJW;loEiVC`v=XR!xKpmQrGjsdc7&<unn^By<2{3|Y44e!rD5&l60i
+zDau!z&X@AO@A{ZeRO=wW=5K-RcGqoCHCe6}EjYjCgn_O-p*E7|?887it3Sc&6k5yC
+zT%e}97K(Wq+ia7*ggZ4)W4oS>zk_3c@ICwsJph_sP^Q!=N~Qn+002ovPDHLkV1l45
+Ba)<x`
+
+diff --git a/src/main/resources/assets/doomedbgfix/textures/item/eye_implant.png b/src/main/resources/assets/doomedbgfix/textures/item/eye_implant.png
+index 898e6da00037ea5a8873429aeb855481cdc83907..05b2086fcb95e6e869356d68cdf0e0546a450ff8 100644
+GIT binary patch
+delta 247
+zcmV<T00{rI0+RxeB!AjTL_t(|oZXTy4?$5FhaV>R1d1DOuv;-fphzYusw7g-OjnFg
+zLKJUuu83-mNj958x+5IHpRs!nbE7A|=l6SdcHRU3&2TtS<IzYp>UE{dg#3oNTwb+X
+zO$@^TKsW-qmdqDRgqXf{BA?2_5pQSdR1!eFN<4xG!V%2&J8)dfB)ZxX)8xWB0f1|n
+z^owO&%hYDHH;`+|=6ImH+QP2_+qMCyWwN)y@r=|6v|G48*pvBU3E<g+uK=K0DyYrr
+xLOPZ7UEfDKm8|yTd}Y!r1uqv8@!;j4TmdcePS76V{B{5U002ovPDHLkV1fg`b;kez
+
+delta 281
+zcmV+!0p|Xb0<;2<B!Bx!L_t(|oW+u{Zo)7WMGsXLhJHb<f|Lk}DIf+0x+DwA)P<EF
+zsk*Z;(SCtv)G=%<lo?nNsVbDIU(n4=M7HBFASCW)zkBbq-@9;c)T#=D!Hd$*>-D#j
+z>$!y8PKY1)05qN(0CYQ{+H7|vBhMv{;}`%T1OR!S7lwe+O@BO>SO|fX(s-F4_)e1t
+zn*<=GBuy9mJ=Qt)+8ldrK4za}hfFu2WMJdJ)nqz+y+ko*kR39k__JK`zW;?*v$&hj
+zzYI<>jPnfa@3<Q1+b~vg-o0+5W3$}>W+qDEumfbHDo~7*NTrkHqPP;{BvNmq{&nIg
+fc)DJE3!DH+(-K+d0auC=00000NkvXXu0mjfnYV%E
+
+diff --git a/src/main/resources/data/doomedbgfix/recipes/empty_eye_implant.json b/src/main/resources/data/doomedbgfix/recipes/empty_eye_implant.json
+index 46c03b3..69e776f 100644
+--- a/src/main/resources/data/doomedbgfix/recipes/empty_eye_implant.json
++++ b/src/main/resources/data/doomedbgfix/recipes/empty_eye_implant.json
+@@ -1,15 +1,17 @@
+ {
+   "type": "minecraft:crafting_shaped",
+   "pattern": [
+-    " I ",
+-    "I I",
+-    " I "
++    "scs",
++    "cpc",
++    "scs"
+   ],
+   "key": {
+-    "I": { "item": "minecraft:iron_nugget" }
++    "s": { "item": "minecraft:netherite_scrap" },
++    "c": { "item": "minecraft:copper_ingot" },
++    "p": { "item": "doomedmatu:mechanical_prosthetic" }
+   },
+   "result": {
+     "item": "doomedbgfix:empty_eye_implant",
+     "count": 1
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/resources/data/doomedbgfix/recipes/eye_implant.json b/src/main/resources/data/doomedbgfix/recipes/eye_implant.json
+index f714634..12d38a6 100644
+--- a/src/main/resources/data/doomedbgfix/recipes/eye_implant.json
++++ b/src/main/resources/data/doomedbgfix/recipes/eye_implant.json
+@@ -1,17 +1,20 @@
+ {
+   "type": "minecraft:crafting_shaped",
+   "pattern": [
+-    " G ",
+-    "IPI",
+-    " G "
++    "gdg",
++    "cSc",
++    "rer"
+   ],
+   "key": {
+-    "G": { "item": "minecraft:glass_pane" },
+-    "I": { "item": "minecraft:iron_nugget" },
+-    "P": { "item": "doomedbgfix:empty_eye_implant" }
++    "g": { "item": "minecraft:gold_ingot" },
++    "d": { "item": "minecraft:diamond" },
++    "c": { "item": "doomedmatu:overclock_chip" },
++    "S": { "item": "doomedbgfix:empty_eye_implant" },
++    "r": { "item": "minecraft:redstone_block" },
++    "e": { "item": "minecraft:ender_eye" }
+   },
+   "result": {
+     "item": "doomedbgfix:eye_implant",
+     "count": 1
+   }
+-}
+\ No newline at end of file
++}

@@ -1,6 +1,7 @@
 package ru.renat.doomedbgfix.client;
 
 import net.mattlives.doomedmatu.body.BodyPart;
+import net.mattlives.doomedmatu.body.PatientSnapshot;
 import net.mattlives.doomedmatu.client.ClientSfx;
 import net.mattlives.doomedmatu.client.screen.DoomedScreen;
 import net.mattlives.doomedmatu.client.screen.HealthPanelBackdrop;
@@ -22,10 +23,9 @@ import ru.renat.doomedbgfix.net.S2COpenEyeCutPacket;
 import java.util.Locale;
 
 /**
- * Удаление глаза скальпелем, три этапа:
- *  1) обвести ободок глаза (конъюнктива, 8 дуг);
- *  2) перепилить четыре мышцы, водя скальпелем поперёк каждой;
- *  3) перерезать зрительный нерв.
+ * Мини-игры с глазом (на себе и на другом игроке), три этапа в каждой.
+ *  Удаление (скальпель): ободок -> четыре мышцы -> зрительный нерв.
+ *  Установка (пинцет):   нерв  -> четыре мышцы  -> ободок (швы).
  * Прогресс, боль и кровь считает сервер, здесь только ввод и отрисовка.
  */
 public final class EyeCutScreen extends DoomedScreen {
@@ -56,8 +56,12 @@ public final class EyeCutScreen extends DoomedScreen {
     private static final int SCALPEL_H = 34;
 
     private final BodyPart part;
+    private final int patientId;
+    private final int mode;
     private final long token;
     private LimbView view;
+    private final PatientSnapshot snapshot;
+    private final long snapshotAtMs;
 
     private final float[] server = new float[EyeCutModel.SEGMENTS];
     private final float[] shown = new float[EyeCutModel.SEGMENTS];
@@ -66,29 +70,48 @@ public final class EyeCutScreen extends DoomedScreen {
 
     private boolean holding;
     private boolean stopped;
-    private boolean severed;
+    private boolean finished;
     private float lastX;
     private float lastY;
     private long lastSendMs;
     private long lastSoundMs;
 
     public EyeCutScreen(S2COpenEyeCutPacket packet) {
-        super(Component.translatable("doomedbgfix.eye.cut.title"));
+        super(Component.translatable(titleKey(EyeCutModel.normMode(packet.mode()))));
         this.part = BodyPart.values()[Mth.clamp(packet.part(), 0, BodyPart.values().length - 1)];
+        this.patientId = packet.patientId();
+        this.mode = EyeCutModel.normMode(packet.mode());
         this.token = packet.token();
         this.view = packet.view();
+        this.snapshot = packet.snapshot();
+        this.snapshotAtMs = System.currentTimeMillis();
         System.arraycopy(packet.progress(), 0, server, 0, EyeCutModel.SEGMENTS);
         System.arraycopy(packet.progress(), 0, shown, 0, EyeCutModel.SEGMENTS);
-        this.stage = Math.min(EyeCutModel.currentStage(server), EyeCutModel.STAGES - 1);
+        this.stage = Math.min(EyeCutModel.currentStage(server, mode), EyeCutModel.STAGES - 1);
     }
 
     @Override protected int virtualW() { return 1280; }
     @Override protected int virtualH() { return 720; }
-    @Override protected PainHand.HandPose handPose() { return PainHand.HandPose.GRASP; }
+    @Override protected PainHand.HandPose handPose() {
+        return mode == EyeCutModel.MODE_INSTALL ? PainHand.HandPose.TWEEZERS : PainHand.HandPose.GRASP;
+    }
+
+    private static String titleKey(int mode) {
+        return mode == EyeCutModel.MODE_INSTALL ? "doomedbgfix.eye.install.title" : "doomedbgfix.eye.cut.title";
+    }
+
+    private String keyPrefix() {
+        return mode == EyeCutModel.MODE_INSTALL ? "doomedbgfix.eye.install." : "doomedbgfix.eye.cut.";
+    }
+
+    /** Насколько ткань "цела": при удалении убывает с прогрессом, при установке растёт (прикрепляется). */
+    private float intact(float progress) {
+        return mode == EyeCutModel.MODE_INSTALL ? progress : 1f - progress;
+    }
 
     @Override
     protected float[] handDrawPos(float vmx, float vmy) {
-        if (!holding) return null;
+        if (!holding || mode == EyeCutModel.MODE_INSTALL) return null;
         // Скальпель торчит влево от курсора, рука держит рукоять справа.
         return new float[]{vmx + SCALPEL_W - 30f, vmy + 8f};
     }
@@ -97,7 +120,7 @@ public final class EyeCutScreen extends DoomedScreen {
 
     @Override
     protected boolean doMouseClicked(double hx, double hy, int button) {
-        if (button != 0 || stopped || severed) return false;
+        if (button != 0 || stopped || finished) return false;
         holding = true;
         lastX = (float) hx;
         lastY = (float) hy;
@@ -120,7 +143,7 @@ public final class EyeCutScreen extends DoomedScreen {
     }
 
     private void sample(float hx, float hy) {
-        if (!holding || stopped || severed) return;
+        if (!holding || stopped || finished) return;
         float prevX = lastX;
         float prevY = lastY;
         lastX = hx;
@@ -129,8 +152,8 @@ public final class EyeCutScreen extends DoomedScreen {
         float dy = hy - prevY;
         if (dx * dx + dy * dy < 0.25f) return;
 
-        switch (stage) {
-            case EyeCutModel.STAGE_RIM -> {
+        switch (EyeCutModel.groupAt(mode, stage)) {
+            case EyeCutModel.GROUP_RIM -> {
                 float r = (float) Math.hypot(hx - CX, hy - CY);
                 if (Math.abs(r - R) > RING_BAND) return;
                 float a1 = (float) Math.atan2(prevY - CY, prevX - CX);
@@ -140,7 +163,7 @@ public final class EyeCutScreen extends DoomedScreen {
                 while (da < -Math.PI) da += (float) (Math.PI * 2.0);
                 add(rimIndex(a2), Math.abs(da) * R / RIM_SEG_PX);
             }
-            case EyeCutModel.STAGE_MUSCLE -> {
+            case EyeCutModel.GROUP_MUSCLE -> {
                 for (int i = 0; i < EyeCutModel.MUSCLES; i++) {
                     if (inBar(MUSCLE_DEG[i], hx, hy)) {
                         add(EyeCutModel.RIM + i, Math.abs(perp(MUSCLE_DEG[i], dx, dy)) / MUSCLE_SWEEP_PX);
@@ -165,7 +188,7 @@ public final class EyeCutScreen extends DoomedScreen {
     private void flush() {
         long now = System.currentTimeMillis();
         for (int i = 0; i < EyeCutModel.SEGMENTS; i++) {
-            if (pending[i] > 0.002f && !stopped && !severed) {
+            if (pending[i] > 0.002f && !stopped && !finished) {
                 BGNetwork.sendEyeWork(new C2SEyeCutWorkPacket(token, part.ordinal(), i, pending[i]));
             }
             pending[i] = 0f;
@@ -198,16 +221,20 @@ public final class EyeCutScreen extends DoomedScreen {
     public void accept(S2CEyeCutStatePacket state) {
         if (state.token() != token) return;
 
-        float before = EyeCutModel.total(server);
+        float before = EyeCutModel.total(server, mode);
         System.arraycopy(state.progress(), 0, server, 0, EyeCutModel.SEGMENTS);
         if (state.view() != null) view = state.view();
 
-        if (state.severed()) {
-            severed = true;
+        if (state.done()) {
+            finished = true;
             holding = false;
             java.util.Arrays.fill(shown, 1f);
             flashSuccess();
-            ClientSfx.play(DoomedSounds.GORE.get(), 0.9f, 0.5f);
+            if (mode == EyeCutModel.MODE_INSTALL) {
+                ClientSfx.play(DoomedSounds.BEEP1.get(), 0.6f, 1.3f);
+            } else {
+                ClientSfx.play(DoomedSounds.GORE.get(), 0.9f, 0.5f);
+            }
             closeNow();
             return;
         }
@@ -218,12 +245,17 @@ public final class EyeCutScreen extends DoomedScreen {
             return;
         }
 
-        float after = EyeCutModel.total(server);
+        float after = EyeCutModel.total(server, mode);
         long now = System.currentTimeMillis();
         if (after > before + 1.0E-4f && now - lastSoundMs >= 220L) {
             lastSoundMs = now;
-            ClientSfx.play(DoomedSounds.CUTEYE.get(), 0.7f, 0.4f);
-            winceFlash(Math.min(0.55f, 0.15f + after * 0.4f));
+            if (mode == EyeCutModel.MODE_INSTALL) {
+                ClientSfx.play(DoomedSounds.BEEP1.get(), 0.25f, 0.8f + after * 0.5f);
+            } else {
+                ClientSfx.play(DoomedSounds.CUTEYE.get(), 0.7f, 0.4f);
+                // Вспышка боли только у того, кому режут глаз (оператор на другом игроке боли не чувствует).
+                if (patientId == -1) winceFlash(Math.min(0.55f, 0.15f + after * 0.4f));
+            }
         }
     }
 
@@ -238,7 +270,7 @@ public final class EyeCutScreen extends DoomedScreen {
 
     @Override
     public void onClose() {
-        if (!severed && token != 0L) BGNetwork.sendStop(new C2SCutStopPacket(token));
+        if (!finished && token != 0L) BGNetwork.sendStop(new C2SCutStopPacket(token));
         EyeCutClient.clear(this);
         super.onClose();
     }
@@ -253,14 +285,18 @@ public final class EyeCutScreen extends DoomedScreen {
             if (Math.abs(server[i] - shown[i]) < 0.002f) shown[i] = server[i];
         }
 
-        HealthPanelBackdrop.render(gg, this.font);
+        if (patientId == -1 || snapshot == null) {
+            HealthPanelBackdrop.render(gg, this.font);
+        } else {
+            HealthPanelBackdrop.render(gg, this.font, snapshot, patientId, snapshotAtMs);
+        }
 
-        gg.drawCenteredString(this.font, Component.translatable("doomedbgfix.eye.cut.title").getString()
+        gg.drawCenteredString(this.font, Component.translatable(titleKey(mode)).getString()
                 + " - " + part.displayName(), (int) CX, 72, 0xFFFFFF);
 
         drawNerve(gg);
         drawMuscles(gg);
-        drawEyeball(gg);
+        if (mode == EyeCutModel.MODE_INSTALL) drawImplant(gg); else drawEyeball(gg);
         drawRim(gg);
         drawBlood(gg, hx, hy);
         drawScalpel(gg, hx, hy);
@@ -268,20 +304,20 @@ public final class EyeCutScreen extends DoomedScreen {
     }
 
     private void drawNerve(GuiGraphics gg) {
-        float p = shown[EyeCutModel.RIM + EyeCutModel.MUSCLES];
-        boolean active = stage == EyeCutModel.STAGE_NERVE;
-        int color = p >= 1f ? 0xFF4A1A1A : lerp(active ? 0xFFEDE3A8 : 0xFF9C9678, 0xFF5A1010, p);
-        float far = p >= 1f ? BAR_NEAR + 14f : BAR_FAR;
+        float k = intact(shown[EyeCutModel.RIM + EyeCutModel.MUSCLES]);
+        boolean active = stageIsGroup(EyeCutModel.GROUP_NERVE);
+        int color = lerp(0xFF4A1A1A, active ? 0xFFEDE3A8 : 0xFF9C9678, k);
+        float far = BAR_NEAR + 14f + (BAR_FAR - BAR_NEAR - 14f) * k;
         drawBar(gg, NERVE_DEG, R * 0.55f, far, 17f, color);
     }
 
     private void drawMuscles(GuiGraphics gg) {
         for (int i = 0; i < EyeCutModel.MUSCLES; i++) {
-            float p = shown[EyeCutModel.RIM + i];
-            boolean active = stage == EyeCutModel.STAGE_MUSCLE;
+            float k = intact(shown[EyeCutModel.RIM + i]);
+            boolean active = stageIsGroup(EyeCutModel.GROUP_MUSCLE);
             int base = active ? 0xFFB84646 : 0xFF8A4A4A;
-            int color = lerp(base, 0xFF3A0808, p);
-            float far = p >= 1f ? BAR_NEAR + 16f : BAR_FAR;
+            int color = lerp(0xFF3A0808, base, k);
+            float far = BAR_NEAR + 16f + (BAR_FAR - BAR_NEAR - 16f) * k;
             drawBar(gg, MUSCLE_DEG[i], R * 0.55f, far, BAR_HALF, color);
         }
     }
@@ -312,6 +348,23 @@ public final class EyeCutScreen extends DoomedScreen {
         gg.fill((int) CX - 22, (int) CY - 30, (int) CX - 12, (int) CY - 22, 0xCCFFFFFF);
     }
 
+    /** Кибернетический глаз: стальной корпус, линза наливается светом по мере установки. */
+    private void drawImplant(GuiGraphics gg) {
+        float glow = EyeCutModel.total(shown, mode);
+        fillCircle(gg, R, 0xFF70757D);
+        fillCircle(gg, R - 9f, 0xFF9AA0A8);
+        fillCircle(gg, R - 24f, 0xFF50555C);
+        fillCircle(gg, 70f, 0xFF23282D);
+        fillCircle(gg, 62f, lerp(0xFF1B4F49, 0xFF2E9A8E, glow));
+        fillCircle(gg, 40f, lerp(0xFF123631, 0xFF58D8C6, glow));
+        fillCircle(gg, 20f, 0xFF081210);
+        gg.fill((int) CX - 24, (int) CY - 32, (int) CX - 12, (int) CY - 24, 0xCCFFFFFF);
+    }
+
+    private boolean stageIsGroup(int group) {
+        return stage < EyeCutModel.STAGES && EyeCutModel.groupAt(mode, stage) == group;
+    }
+
     private void fillCircle(GuiGraphics gg, float radius, int color) {
         for (int y = (int) (CY - radius); y < CY + radius; y++) {
             float off = (y + 0.5f - CY) / radius;
@@ -323,23 +376,33 @@ public final class EyeCutScreen extends DoomedScreen {
 
     private void drawRim(GuiGraphics gg) {
         float segRad = (float) (Math.PI * 2.0 / EyeCutModel.RIM);
-        boolean active = stage == EyeCutModel.STAGE_RIM;
-        for (float deg = 0f; deg < 360f; deg += 1.2f) {
+        boolean active = stageIsGroup(EyeCutModel.GROUP_RIM);
+        boolean install = mode == EyeCutModel.MODE_INSTALL;
+        int step = 0;
+        for (float deg = 0f; deg < 360f; deg += 1.2f, step++) {
             float t = (float) Math.toRadians(deg);
             int idx = Math.min(EyeCutModel.RIM - 1, (int) (t / segRad));
             float f = (t - idx * segRad) / segRad;
-            boolean cut = f <= shown[idx];
-            int color = cut ? 0xFF4A0B0B : (active ? 0xFFD08080 : 0xFFB48A8A);
+            boolean done = f <= shown[idx];
+            int color;
+            if (install) {
+                color = done ? 0xFFD8B0A0 : (active ? 0xFF8A1A1A : 0xFF5A1414);
+            } else {
+                color = done ? 0xFF4A0B0B : (active ? 0xFFD08080 : 0xFFB48A8A);
+            }
             float ang = t - (float) (Math.PI / 2.0);
             int x = Math.round(CX + (float) Math.cos(ang) * R);
             int y = Math.round(CY + (float) Math.sin(ang) * R);
             gg.fill(x - 3, y - 3, x + 3, y + 3, color);
+            if (install && done && step % 6 == 0) {
+                gg.fill(x - 1, y - 6, x + 1, y + 6, 0xFF2A1A1A);
+            }
         }
     }
 
     private void drawBlood(GuiGraphics gg, float hx, float hy) {
         float bleed = view == null ? 0f : view.bleed();
-        float total = EyeCutModel.total(shown);
+        float total = EyeCutModel.total(shown, mode);
         if (total < 0.02f || bleed < 0.2f) return;
         int drops = Math.min(16, 1 + (int) (bleed / 6f));
         long t = System.currentTimeMillis() / 90L;
@@ -354,15 +417,15 @@ public final class EyeCutScreen extends DoomedScreen {
     }
 
     private void drawScalpel(GuiGraphics gg, float hx, float hy) {
-        if (!holding) return;
+        if (!holding || mode == EyeCutModel.MODE_INSTALL) return;
         gg.blit(SCALPEL, Math.round(hx), Math.round(hy) - SCALPEL_H / 2 + 4, SCALPEL_W, SCALPEL_H,
                 0f, 0f, SCALPEL_TEX_W, SCALPEL_TEX_H, SCALPEL_TEX_W, SCALPEL_TEX_H);
     }
 
     private void drawHud(GuiGraphics gg) {
         int y = (int) (CY + R + 168);
-        String stageName = Component.translatable("doomedbgfix.eye.cut.stage." + stage).getString();
-        gg.drawCenteredString(this.font, stageName + "   " + Math.round(EyeCutModel.total(shown) * 100f) + "%",
+        String stageName = Component.translatable(keyPrefix() + "stage." + stage).getString();
+        gg.drawCenteredString(this.font, stageName + "   " + Math.round(EyeCutModel.total(shown, mode) * 100f) + "%",
                 (int) CX, y, 0xFFE8E0D0);
 
         if (view != null) {
@@ -373,7 +436,7 @@ public final class EyeCutScreen extends DoomedScreen {
 
         String hint = stopped
                 ? Component.translatable("doomedbgfix.cut.hint.paused").getString()
-                : Component.translatable("doomedbgfix.eye.cut.hint." + stage).getString();
+                : Component.translatable(keyPrefix() + "hint." + stage).getString();
         gg.drawCenteredString(this.font, hint, (int) CX, 636, 0xFFFFE0A0);
         gg.drawCenteredString(this.font, Component.translatable("doomedbgfix.cut.hint.esc").getString(),
                 (int) CX, 652, 0xFFB0B0B0);

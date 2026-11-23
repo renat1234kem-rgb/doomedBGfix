@@ -28,5 +28,16 @@
   "doomedbgfix.eye.cut.stage.2": "Cut the optic nerve",
   "doomedbgfix.eye.cut.hint.0": "Hold LMB and trace the scalpel around the rim of the eye",
   "doomedbgfix.eye.cut.hint.1": "Saw back and forth across each muscle",
-  "doomedbgfix.eye.cut.hint.2": "Cut across the optic nerve at the bottom"
+  "doomedbgfix.eye.cut.hint.2": "Cut across the optic nerve at the bottom",
+  "doomedbgfix.eye.install.title": "Eye implant installation",
+  "doomedbgfix.eye.install.stage.0": "Connect the optic nerve",
+  "doomedbgfix.eye.install.stage.1": "Attach the eye muscles",
+  "doomedbgfix.eye.install.stage.2": "Suture the rim of the socket",
+  "doomedbgfix.eye.install.hint.0": "Hold and move the tweezers across the nerve",
+  "doomedbgfix.eye.install.hint.1": "Hold and move across each muscle to attach it",
+  "doomedbgfix.eye.install.hint.2": "Hold and trace the ring to suture it",
+  "doomedbgfix.eye.implant.no_empty_socket_other": "They have no empty eye socket.",
+  "doomedbgfix.eye.cut.coop_disabled": "This server does not allow operating on other people.",
+  "doomedbgfix.eye.cut.two_hands": "That takes two working hands.",
+  "doomedbgfix.eye.cut.cannot_answer": "Their eye could still be saved, and they cannot answer."
 }

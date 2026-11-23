@@ -12,7 +12,7 @@ import java.util.Optional;
 
 public final class BGNetwork {
 
-    private static final String PROTOCOL = "2";
+    private static final String PROTOCOL = "3";
     public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(new ResourceLocation(DoomedBGFix.MODID, "cut"))
             .networkProtocolVersion(() -> PROTOCOL)

@@ -9,7 +9,7 @@ import ru.renat.doomedbgfix.eye.EyeCutModel;
 import java.util.function.Supplier;
 
 public record S2CEyeCutStatePacket(long token, int part, int stage, float[] progress,
-                                   boolean valid, boolean severed, LimbView view) {
+                                   boolean valid, boolean done, LimbView view) {
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeLong(token);
@@ -17,7 +17,7 @@ public record S2CEyeCutStatePacket(long token, int part, int stage, float[] prog
         buf.writeVarInt(stage);
         for (int i = 0; i < EyeCutModel.SEGMENTS; i++) buf.writeFloat(progress[i]);
         buf.writeBoolean(valid);
-        buf.writeBoolean(severed);
+        buf.writeBoolean(done);
         buf.writeBoolean(view != null);
         if (view != null) view.encode(buf);
     }
@@ -29,9 +29,9 @@ public record S2CEyeCutStatePacket(long token, int part, int stage, float[] prog
         float[] progress = new float[EyeCutModel.SEGMENTS];
         for (int i = 0; i < progress.length; i++) progress[i] = buf.readFloat();
         boolean valid = buf.readBoolean();
-        boolean severed = buf.readBoolean();
+        boolean done = buf.readBoolean();
         LimbView view = buf.readBoolean() ? LimbView.decode(buf) : null;
-        return new S2CEyeCutStatePacket(token, part, stage, progress, valid, severed, view);
+        return new S2CEyeCutStatePacket(token, part, stage, progress, valid, done, view);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {

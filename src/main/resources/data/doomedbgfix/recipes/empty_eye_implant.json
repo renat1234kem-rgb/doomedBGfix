@@ -1,12 +1,14 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    " I ",
-    "I I",
-    " I "
+    "scs",
+    "cpc",
+    "scs"
   ],
   "key": {
-    "I": { "item": "minecraft:iron_nugget" }
+    "s": { "item": "minecraft:netherite_scrap" },
+    "c": { "item": "minecraft:copper_ingot" },
+    "p": { "item": "doomedmatu:mechanical_prosthetic" }
   },
   "result": {
     "item": "doomedbgfix:empty_eye_implant",
